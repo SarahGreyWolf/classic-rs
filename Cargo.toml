@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "mineonline_api",
+    "mojang_api",
+    "mc_packets",
+    "server",
+]
+exclude = []
