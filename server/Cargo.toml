@@ -7,8 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "0.2.20", features = ["full"] }
-futures = "0.3.5"
+flume = "0.7.1"
 
 mineonline_api = {path = "../mineonline_api"}
 mc_packets = {path = "../mc_packets"}

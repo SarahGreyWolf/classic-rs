@@ -163,7 +163,7 @@ impl Packet<&[u8]> for ClientBound {
 
 pub enum ServerBound {
     // Final Byte unused, always 0x00
-    // THIS ONE SEEMS INCORRECT
+    // TODO: Implement proper identification
     // PlayerIdentification(u8, String, String, u8),
     PlayerIdentification(u8, String),
     SetBlock(Short, Short, Short, u8, u8),
