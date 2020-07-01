@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 tokio = { version = "0.2.20", features = ["full"] }
+futures = "0.3.5"
 
-mineonline_api = {path = "..\\mineonline_api"}
-mc_packets = {path = "..\\mc_packets"}
+mineonline_api = {path = "../mineonline_api"}
+mc_packets = {path = "../mc_packets"}

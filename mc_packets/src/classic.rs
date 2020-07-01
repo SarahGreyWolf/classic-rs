@@ -56,6 +56,7 @@ impl Packet<&[u8]> for ClientBound {
                 for x in chunk_data.to_vec() {
                     level_data_chunk.push(x);
                 }
+                level_data_chunk.push(p_complete);
                 level_data_chunk
             },
             ClientBound::LevelFinalize(width, height, depth) => {
@@ -156,9 +157,6 @@ impl Packet<&[u8]> for ClientBound {
             ClientBound::UpdateUserType(u_type) => {
                 vec![0x0F, u_type]
             }
-            _ => {
-                panic!("Unknown Packet");
-            }
         }
     }
 }
@@ -171,7 +169,8 @@ pub enum ServerBound {
     SetBlock(Short, Short, Short, u8, u8),
     PositionAndOrientation(u8, Short, Short, Short, u8, u8),
     // Byte Unused, always 0xFF
-    Message(u8, String)
+    Message(u8, String),
+    UnknownPacket
 }
 
 impl Packet<&[u8]> for ServerBound {
@@ -180,12 +179,12 @@ impl Packet<&[u8]> for ServerBound {
         let id = cursor.read_u8().unwrap();
         match id {
             0x00 => {
-                let p_version = cursor.read_u8().unwrap();
+                let protocol = cursor.read_u8().unwrap();
                 let msg = buffer[cursor.position() as usize..].to_vec().into_iter()
                     .take_while(|&x| x != (0 as u8)).collect::<Vec<_>>();
                 let msg = String::from_utf8(msg)
                     .expect("Invalid utf8 Message").replace("\u{20}", "");
-                ServerBound::PlayerIdentification(p_version, msg)
+                ServerBound::PlayerIdentification(protocol, msg)
             }
             0x05 => {
                 let x: Short = cursor.read_i16::<BigEndian>().unwrap();
@@ -213,7 +212,7 @@ impl Packet<&[u8]> for ServerBound {
                 ServerBound::Message(unused, msg)
             }
             _ => {
-                ServerBound::PlayerIdentification(0, "".to_string())
+                ServerBound::UnknownPacket
             }
         }
     }
