@@ -8,39 +8,50 @@ use mc_packets::Packet;
 use mc_packets::classic::{ClientBound, ServerBound};
 
 mod client;
+mod config;
+
 use client::Client;
+use config::Config;
 
 struct Server {
     ip: String,
     port: u16,
-    listener: TcpListener,
+    name: String,
+    motd: String,
+    protocol: u8,
     heartbeat: Heartbeat,
+    listener: TcpListener,
     tx: Sender<Vec<u8>>,
     rx: Receiver<Vec<u8>>,
     clients: Vec<Sender<Vec<u8>>>
 }
 
 impl Server {
-    pub fn new(ip: &str, port: u16) -> Self {
-        println!("Server Running at {}:{:#}", ip, port);
-        let listener = TcpListener::bind(format!("{}:{:#}", ip, port))
+    pub fn new() -> Self {
+        let config = Config::get();
+
+        let listener = TcpListener::bind(format!("{}:{:#}", config.ip, config.port))
             .expect("Failed to bind");
         let heartbeat = Heartbeat::new(
-            ip,
-            port,
-            "Sarah's Pipe Dream",
-            false,
-            8,
-            true,
+            &config.ip,
+            config.port,
+            &config.name,
+            config.public,
+            config.max_players,
+            config.online_mode,
             "90632803F45C15164587256A08C0ECB4",
-            true
+            config.whitelisted
         );
         let (tx, rx) = flume::unbounded::<Vec<u8>>();
+        println!("Server Running at {}:{:#}", config.ip, config.port);
         Self {
-            ip: ip.to_string(),
-            port,
-            listener,
+            ip: config.ip,
+            port: config.port,
+            name: config.name,
+            motd: config.motd,
+            protocol: 7,
             heartbeat,
+            listener,
             tx,
             rx,
             clients: Vec::new()
@@ -101,7 +112,7 @@ fn main() -> Result<(), std::io::Error> {
     // hearbeat.update_whitelist(vec!["SarahGreyWolf".to_string()], vec![]);
     // hearbeat.build_mineonline_request();
     // hearbeat.beat().await;
-    let server = Server::new("127.0.0.1", 25565);
+    let server = Server::new();
     server.listen().expect("Failed to listen");
 
     Ok(())

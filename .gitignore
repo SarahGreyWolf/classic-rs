@@ -2,3 +2,4 @@
 /.idea
 *.ig
 Cargo.lock
+server.toml

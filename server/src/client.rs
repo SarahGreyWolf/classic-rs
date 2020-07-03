@@ -1,11 +1,12 @@
 use std::net::{TcpListener, TcpStream};
-use std::thread::spawn;
+use std::io::Write;
 
 use flume::{Receiver, Sender};
 
 use mc_packets::Packet;
 use mc_packets::classic::{ClientBound, ServerBound};
-use std::io::Write;
+
+use crate::config::Config;
 
 pub struct Client {
     username: String,
@@ -45,23 +46,23 @@ impl Client {
             Err(e) => eprintln!("Accept Failed = {:?}", e),
             Ok(mut sock) => {
                 let mut buffer = [0 as u8; 1460];
-                sock.peek(&mut buffer);
+                sock.peek(&mut buffer).expect("Failed to peek at incoming");
 
                 let incoming_packet = Packet::from(buffer.as_ref());
                 match incoming_packet {
                     ServerBound::PlayerIdentification(protocol, username) => {
                         self.username = username;
                         println!("{}", self.username);
+                        let config = Config::get();
                         let data = Packet::into(
                             // TODO: Get this from config or server struct
                             ClientBound::ServerIdentification(
                                 7,
-                                "Sarah's Pipe Dream".to_string(),
-                                "We live here damnit!".to_string(),
+                                config.name.to_string(),
+                                config.motd.to_string(),
                                 0x64
                             )
                         );
-                        println!("{:x?}", data);
                         sock.write(data.as_slice()).expect("Failed to write data");
                     }
                     ServerBound::SetBlock(_, _, _, _, _) => {}
