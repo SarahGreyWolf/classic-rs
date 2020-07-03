@@ -1,3 +1,6 @@
+//! # Classic
+//! The packets both ClientBound and ServerBound used for classic minecraft protocol 7
+
 use byteorder::{BigEndian, ReadBytesExt};
 use std::io::{Cursor};
 use std::convert::TryInto;
@@ -6,6 +9,7 @@ use crate::Packet;
 type Short = i16;
 type ByteArray = [u8; 1024];
 
+/// Packets to be sent to the clients
 pub enum ClientBound {
     ServerIdentification(u8, String, String, u8),
     Ping,
@@ -161,6 +165,7 @@ impl Packet<&[u8]> for ClientBound {
     }
 }
 
+/// Packets to be sent to servers
 pub enum ServerBound {
     // Final Byte unused, always 0x00
     // TODO: Implement proper identification

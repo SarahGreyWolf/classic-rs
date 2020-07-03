@@ -1,3 +1,6 @@
+//! # Heartbeat
+//! Used for sending Minecraft Heartbeats to [Mineonline](http://mineonline.codie.gg)
+
 use rand::{thread_rng, Rng};
 use json::{parse, stringify, JsonValue};
 use json::number::Number;
@@ -9,6 +12,7 @@ use std::thread;
 
 const MINEONLINE_HEARTBEAT_URL: &str = "http://mineonline.codie.gg/mineonline/listserver.jsp";
 
+/// Heartbeat Object
 pub struct Heartbeat {
     ip: String,
     port: u16,
@@ -27,6 +31,8 @@ pub struct Heartbeat {
 }
 
 impl Heartbeat {
+    /// Create a Heartbeat Object.
+    ///
     pub fn new(ip: &str, port: u16, name: &str, public: bool, max_players: u16, online: bool,
                client_hash: &str, whitelisted: bool) -> Self {
         Self {
@@ -46,21 +52,22 @@ impl Heartbeat {
             mineonline_req: "".to_string(),
         }
     }
-
+    /// Update the number of users currently connected to the server in the heartbeat.
     pub fn update_users(&mut self, user_count: u16) {
         self.users = user_count;
     }
 
+    /// Update the servers ban list in the heartbeat.
     pub fn update_bans(&mut self, banned_users: Vec<String>, banned_ips: Vec<String>) {
         self.banned_users = banned_users;
         self.banned_ips = banned_ips;
     }
-
+    /// Update the servers whitelist in the heartbeat.
     pub fn update_whitelist(&mut self, wl_users: Vec<String>, wl_ips: Vec<String>) {
         self.whitelisted_users = wl_users;
         self.whitelisted_ips = wl_ips;
     }
-
+    /// Builds the request data from the heartbeat.
     pub fn build_mineonline_request(&mut self) -> String {
         let mut mineonline_json: Object = Object::new();
         mineonline_json.insert("ip",
@@ -98,10 +105,18 @@ impl Heartbeat {
 
     }
 
+    pub fn get_user_count(&self) -> u16 {
+        self.users
+    }
+
+    pub fn get_whitelist(&self) -> (&Vec<String>, &Vec<String>) {
+        (&self.whitelisted_users, &self.whitelisted_ips)
+    }
+
     pub fn get_request(&self) -> &str {
         &self.mineonline_req
     }
-
+    /// Causes a heartbeat request to be made to the server
     pub async fn beat(&mut self) {
         let request_client = reqwest::Client::new();
         let request = request_client.post(Url::parse(&MINEONLINE_HEARTBEAT_URL)

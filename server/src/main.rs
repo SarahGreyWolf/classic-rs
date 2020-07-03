@@ -32,7 +32,7 @@ impl Server {
 
         let listener = TcpListener::bind(format!("{}:{:#}", config.ip, config.port))
             .expect("Failed to bind");
-        let heartbeat = Heartbeat::new(
+        let mut heartbeat = Heartbeat::new(
             &config.ip,
             config.port,
             &config.name,
@@ -42,6 +42,7 @@ impl Server {
             "90632803F45C15164587256A08C0ECB4",
             config.whitelisted
         );
+        heartbeat.build_mineonline_request();
         let (tx, rx) = flume::unbounded::<Vec<u8>>();
         println!("Server Running at {}:{:#}", config.ip, config.port);
         Self {
