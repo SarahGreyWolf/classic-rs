@@ -117,13 +117,13 @@ impl Heartbeat {
         &self.mineonline_req
     }
     /// Causes a heartbeat request to be made to the server
-    pub async fn beat(&mut self) {
-        let request_client = reqwest::Client::new();
+    pub fn beat(&mut self) {
+        let request_client = reqwest::blocking::Client::new();
         let request = request_client.post(Url::parse(&MINEONLINE_HEARTBEAT_URL)
             .expect("Failed ot parse to URL")
         ).header("content-type", "application/json").body(self.mineonline_req.clone());
         // println!("Request: {:?}", request);
-        let response = request.send().await.expect("Failed to make post request");
+        let response = request.send().expect("Failed to make post request");
         // println!("Response: {:?}", response);
         if response.status() != StatusCode::OK {
             panic!("Heartbeat Request Failed: {}", response.status());

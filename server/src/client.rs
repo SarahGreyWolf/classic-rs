@@ -1,7 +1,7 @@
-use std::net::{TcpListener, TcpStream};
+use std::net::{TcpStream};
 use std::io::Write;
-
 use flume::{Receiver, Sender};
+use log::{info, debug, error, warn};
 
 use mc_packets::Packet;
 use mc_packets::classic::{ClientBound, ServerBound};
@@ -37,7 +37,7 @@ impl Client {
         }
     }
 
-    pub fn get_id(self) -> u8 {
+    pub fn get_id(&self) -> u8 {
         self.id
     }
 
@@ -52,10 +52,9 @@ impl Client {
                 match incoming_packet {
                     ServerBound::PlayerIdentification(protocol, username) => {
                         self.username = username;
-                        println!("{}", self.username);
+                        debug!("{}", self.username);
                         let config = Config::get();
                         let data = Packet::into(
-                            // TODO: Get this from config or server struct
                             ClientBound::ServerIdentification(
                                 7,
                                 config.name.to_string(),
@@ -64,6 +63,8 @@ impl Client {
                             )
                         );
                         sock.write(data.as_slice()).expect("Failed to write data");
+                        sock.write(Packet::into(ClientBound::LevelInitialize).as_slice()).
+                            expect("Failed to write data");
                     }
                     ServerBound::SetBlock(_, _, _, _, _) => {}
                     ServerBound::PositionAndOrientation(
@@ -79,11 +80,11 @@ impl Client {
                     ServerBound::UnknownPacket => {
                         let msg = String::from_utf8(buffer.to_vec())
                             .expect("Invalid utf8 Message");
-                        println!("{}", msg);
+                        debug!("{}", msg);
                     }
                 }
-                let received = self.rx.try_recv().expect("Failed to receive data");
-                println!("{:x?}", received);
+                let received = self.rx.try_recv().unwrap_or(vec![]);
+                debug!("{:x?}", received);
             }
         }
         Ok(())

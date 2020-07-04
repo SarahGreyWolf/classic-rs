@@ -1,11 +1,15 @@
 use std::net::{TcpListener, TcpStream};
 use std::thread::spawn;
-
+use std::time::SystemTime;
 use flume::{Receiver, Sender};
+
+use fern::colors::{Color, ColoredLevelConfig};
+use log::{info, debug, error, warn};
 
 use mineonline_api::heartbeat::Heartbeat;
 use mc_packets::Packet;
 use mc_packets::classic::{ClientBound, ServerBound};
+use grey_mc_api::event;
 
 mod client;
 mod config;
@@ -23,7 +27,7 @@ struct Server {
     listener: TcpListener,
     tx: Sender<Vec<u8>>,
     rx: Receiver<Vec<u8>>,
-    clients: Vec<Sender<Vec<u8>>>
+    clients: Box::<Vec<Sender<Vec<u8>>>>
 }
 
 impl Server {
@@ -44,7 +48,8 @@ impl Server {
         );
         heartbeat.build_mineonline_request();
         let (tx, rx) = flume::unbounded::<Vec<u8>>();
-        println!("Server Running at {}:{:#}", config.ip, config.port);
+        info!("Server Running at {}:{:#}", config.ip, config.port);
+        // heartbeat.beat();
         Self {
             ip: config.ip,
             port: config.port,
@@ -55,13 +60,14 @@ impl Server {
             listener,
             tx,
             rx,
-            clients: Vec::new()
+            clients: Box::new(Vec::new())
         }
     }
 
     fn game_loop(self) {
         spawn(move || loop {
             let received = self.rx.try_recv().expect("Failed to receive");
+            debug!("FUCK");
             let packet: ServerBound = Packet::from(received.as_slice());
             let clients = &self.clients;
             match packet {
@@ -70,6 +76,7 @@ impl Server {
                 ServerBound::PositionAndOrientation(
                     p_id, x, y, z, yaw, pitch) => {
                     for i in 0..clients.len() {
+                        info!("{:x}", p_id);
                         if i == p_id as usize {
                             continue;
                         }else{
@@ -109,12 +116,23 @@ impl Server {
     }
 }
 fn main() -> Result<(), std::io::Error> {
-
-    // hearbeat.update_whitelist(vec!["SarahGreyWolf".to_string()], vec![]);
-    // hearbeat.build_mineonline_request();
-    // hearbeat.beat().await;
+    let colors = ColoredLevelConfig::new()
+        .info(Color::Magenta)
+        .error(Color::BrightRed);
+    fern::Dispatch::new()
+        .chain(std::io::stdout())
+        .format(move |out, message, record| {
+            out.finish(format_args!(
+                "[{}]{} {}",
+                // This will color the log level only, not the whole line. Just a touch.
+                colors.color(record.level()),
+                chrono::Utc::now().format("[%Y-%m-%d %H:%M:%S]"),
+                message
+            ))
+        })
+        .apply()
+        .unwrap();
     let server = Server::new();
     server.listen().expect("Failed to listen");
-
     Ok(())
 }
