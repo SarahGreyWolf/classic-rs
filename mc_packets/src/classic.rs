@@ -8,23 +8,24 @@ use crate::Packet;
 
 type Short = i16;
 type ByteArray = [u8; 1024];
+type MString = [u8; 64];
 
 /// Packets to be sent to the clients
 pub enum ClientBound {
-    ServerIdentification(u8, String, String, u8),
+    ServerIdentification(u8, MString, MString, u8),
     Ping,
     LevelInitialize,
     LevelDataChunk(Short, ByteArray, u8),
     LevelFinalize(Short, Short, Short),
     SetBlock(Short, Short, Short, u8),
-    SpawnPlayer(i8, String, Short, Short, Short, u8, u8),
+    SpawnPlayer(i8, MString, Short, Short, Short, u8, u8),
     PlayerTeleport(i8, Short, Short, Short, u8, u8),
     PositionAndOrientationUpdate(i8, i8, i8, i8, u8, u8),
     PositionUpdate(i8, i8, i8, i8),
     OrientationUpdate(i8, u8, u8),
     DespawnPlayer(i8),
-    Message(i8, String),
-    DisconnectPlayer(String),
+    Message(i8, MString),
+    DisconnectPlayer(MString),
     UpdateUserType(u8),
 }
 
@@ -38,11 +39,11 @@ impl Packet<&[u8]> for ClientBound {
             ClientBound::ServerIdentification(prot_v, server_name, server_motd, u_type) => {
                 let mut s_identification: Vec<u8> = vec![0x00];
                 s_identification.push(prot_v);
-                for x in server_name.into_bytes() {
-                    s_identification.push(x);
+                for x in 0..server_name.len() {
+                    s_identification.push(server_name[x]);
                 }
-                for x in server_motd.into_bytes() {
-                    s_identification.push(x);
+                for x in 0..server_motd.len() {
+                    s_identification.push(server_motd[x]);
                 }
                 s_identification.push(u_type);
                 s_identification
@@ -88,8 +89,8 @@ impl Packet<&[u8]> for ClientBound {
                 origin_p_id, origin_p_name, x, y, z, yaw, pitch) => {
                 let mut spawn_player: Vec<u8> = vec![0x07];
                 spawn_player.push(origin_p_id.try_into().unwrap());
-                for x in origin_p_name.into_bytes() {
-                    spawn_player.push(x)
+                for x in 0..origin_p_name.len() {
+                    spawn_player.push(origin_p_name[x])
                 }
                 spawn_player.push((x >> 8) as u8);
                 spawn_player.push(x as u8);
@@ -146,15 +147,15 @@ impl Packet<&[u8]> for ClientBound {
             ClientBound::Message(origin_p_id, msg) => {
                 let mut message: Vec<u8> = vec![0x0D];
                 message.push(origin_p_id.try_into().unwrap());
-                for x in msg.into_bytes(){
-                    message.push(x);
+                for x in 0..msg.len(){
+                    message.push(msg[x]);
                 }
                 message
             },
             ClientBound::DisconnectPlayer(reason) => {
                 let mut disconnect_player: Vec<u8> = vec![0x0E];
-                for x in reason.into_bytes() {
-                    disconnect_player.push(x);
+                for x in 0..reason.len() {
+                    disconnect_player.push(reason[x]);
                 }
                 disconnect_player
             },
@@ -170,8 +171,7 @@ pub enum ServerBound {
     // Final Byte unused, always 0x00
     // TODO: Implement proper identification
     // Need to wait for Codie to drop mojang heartbeat and use exclusively mineonline
-    // PlayerIdentification(u8, String, String, u8),
-    PlayerIdentification(u8, String),
+    PlayerIdentification(u8, String, String, u8),
     SetBlock(Short, Short, Short, u8, u8),
     PositionAndOrientation(u8, Short, Short, Short, u8, u8),
     // Byte Unused, always 0xFF
@@ -186,11 +186,19 @@ impl Packet<&[u8]> for ServerBound {
         match id {
             0x00 => {
                 let protocol = cursor.read_u8().unwrap();
-                let msg = buffer[cursor.position() as usize..].to_vec().into_iter()
+                let name = buffer[cursor.position() as usize..
+                    cursor.position() as usize + 64].to_vec().into_iter()
                     .take_while(|&x| x != (0 as u8)).collect::<Vec<_>>();
-                let msg = String::from_utf8(msg)
+                let name = String::from_utf8(name)
                     .expect("Invalid utf8 Message").replace("\u{20}", "");
-                ServerBound::PlayerIdentification(protocol, msg)
+                cursor.set_position(cursor.position() + 64);
+                let key = buffer[cursor.position() as usize..
+                    cursor.position() as usize + 64].to_vec().into_iter()
+                    .take_while(|&x| x != (0 as u8)).collect::<Vec<_>>();
+                let key = String::from_utf8(key)
+                    .expect("Invalid utf8 Message").replace("\u{20}", "");
+                cursor.set_position(cursor.position() + 64);
+                ServerBound::PlayerIdentification(protocol, name, key, 0x00)
             }
             0x05 => {
                 let x: Short = cursor.read_i16::<BigEndian>().unwrap();

@@ -2,11 +2,11 @@ use std::net::{TcpListener, TcpStream};
 use std::thread::spawn;
 use std::time::SystemTime;
 use flume::{Receiver, Sender};
-
 use fern::colors::{Color, ColoredLevelConfig};
 use log::{info, debug, error, warn};
+use rand::{thread_rng, Rng};
+use rand::distributions::Alphanumeric;
 
-use mineonline_api::heartbeat::Heartbeat;
 use mc_packets::Packet;
 use mc_packets::classic::{ClientBound, ServerBound};
 use grey_mc_api::event;
@@ -23,20 +23,25 @@ struct Server {
     name: String,
     motd: String,
     protocol: u8,
-    heartbeat: Heartbeat,
+    salt: String,
+    mo_heartbeat: mineonline_api::heartbeat::Heartbeat,
+    m_heartbeat: mojang_api::heartbeat::Heartbeat,
     listener: TcpListener,
     tx: Sender<Vec<u8>>,
     rx: Receiver<Vec<u8>>,
-    clients: Box::<Vec<Sender<Vec<u8>>>>
+    clients: Box::<Vec<Sender<Vec<u8>>>>,
+    config: Config,
 }
 
 impl Server {
     pub fn new() -> Self {
         let config = Config::get();
-
+        let salt: String = thread_rng().sample_iter(&Alphanumeric).take(16).collect();
         let listener = TcpListener::bind(format!("{}:{:#}", config.ip, config.port))
             .expect("Failed to bind");
-        let mut heartbeat = Heartbeat::new(
+
+        let mut mo_heartbeat = mineonline_api::heartbeat::Heartbeat::new(
+            &config.heartbeat.mineonline.url,
             &config.ip,
             config.port,
             &config.name,
@@ -46,7 +51,28 @@ impl Server {
             "90632803F45C15164587256A08C0ECB4",
             config.whitelisted
         );
-        heartbeat.build_mineonline_request();
+        mo_heartbeat.build_request();
+
+        let mut m_heartbeat = mojang_api::heartbeat::Heartbeat::new(
+            &config.heartbeat.mojang.url,
+            &config.ip,
+            config.port,
+            &config.name,
+            config.public,
+            config.max_players,
+            config.online_mode,
+            &salt,
+            7,
+            config.whitelisted
+        );
+        m_heartbeat.build_request();
+        if config.heartbeat.mineonline.active {
+            mo_heartbeat.beat();
+        }
+        if config.heartbeat.mojang.active {
+            m_heartbeat.beat();
+        }
+
         let (tx, rx) = flume::unbounded::<Vec<u8>>();
         info!("Server Running at {}:{:#}", config.ip, config.port);
         // heartbeat.beat();
@@ -56,22 +82,26 @@ impl Server {
             name: config.name,
             motd: config.motd,
             protocol: 7,
-            heartbeat,
+            salt,
+            mo_heartbeat,
+            m_heartbeat,
             listener,
             tx,
             rx,
-            clients: Box::new(Vec::new())
+            clients: Box::new(Vec::new()),
+            config: Config::get(),
         }
     }
 
-    fn game_loop(self) {
+    fn game_loop(mut self) {
         spawn(move || loop {
             let received = self.rx.try_recv().expect("Failed to receive");
             debug!("FUCK");
             let packet: ServerBound = Packet::from(received.as_slice());
             let clients = &self.clients;
             match packet {
-                ServerBound::PlayerIdentification(protocol, username) => {},
+                ServerBound::PlayerIdentification(protocol, username,
+                                                  ver_key, _) => {},
                 ServerBound::SetBlock(_, _, _, _, _) => {}
                 ServerBound::PositionAndOrientation(
                     p_id, x, y, z, yaw, pitch) => {
@@ -93,6 +123,12 @@ impl Server {
                 }
                 ServerBound::Message(_, _) => {}
                 ServerBound::UnknownPacket => {}
+            }
+            if self.config.heartbeat.mineonline.active {
+                self.mo_heartbeat.beat();
+            }
+            if self.config.heartbeat.mojang.active {
+                self.m_heartbeat.beat();
             }
         });
     }

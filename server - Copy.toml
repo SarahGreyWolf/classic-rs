@@ -1,0 +1,15 @@
+ip = "192.168.0.14"
+port = 25565
+name = "Sarah's Pipe Dream"
+motd = "We Pipe'n Dreams here"
+public = true
+online_mode = true
+whitelisted = false
+max_players = 8
+[heartbeat.mineonline]
+active = true
+url = "http://mineonline.codie.gg/mineonline/listserver.jsp"
+
+[heartbeat.mojang]
+active = true
+url = "http://mineonline.codie.gg/heartbeat.jsp"

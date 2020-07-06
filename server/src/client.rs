@@ -8,6 +8,8 @@ use mc_packets::classic::{ClientBound, ServerBound};
 
 use crate::config::Config;
 
+const STRING_LENGTH: usize = 64;
+
 pub struct Client {
     username: String,
     id: u8,
@@ -50,19 +52,30 @@ impl Client {
 
                 let incoming_packet = Packet::from(buffer.as_ref());
                 match incoming_packet {
-                    ServerBound::PlayerIdentification(protocol, username) => {
+                    ServerBound::PlayerIdentification(protocol, username,
+                                                      ver_key, _) => {
                         self.username = username;
                         debug!("{}", self.username);
+                        debug!("{}", ver_key);
                         let config = Config::get();
+                        let mut name: [u8; STRING_LENGTH] = [0x20; STRING_LENGTH];
+                        for i in 0..config.name.len() {
+                            name[i] = config.name.as_bytes()[i];
+                        }
+                        let mut motd: [u8; STRING_LENGTH] = [0x20; STRING_LENGTH];
+                        for i in 0..config.motd.len() {
+                            motd[i] = config.motd.as_bytes()[i];
+                        }
                         let data = Packet::into(
                             ClientBound::ServerIdentification(
                                 7,
-                                config.name.to_string(),
-                                config.motd.to_string(),
-                                0x64
+                                name,
+                                motd,
+                                0x00
                             )
                         );
-                        sock.write(data.as_slice()).expect("Failed to write data");
+                        // sock.write(data.as_slice()).expect("Failed to write data");
+                        sock.write_all(data.as_slice()).expect("Failed to write data");
                         sock.write(Packet::into(ClientBound::LevelInitialize).as_slice()).
                             expect("Failed to write data");
                     }

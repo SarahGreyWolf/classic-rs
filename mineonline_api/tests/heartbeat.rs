@@ -1,9 +1,10 @@
 use mineonline_api::heartbeat::Heartbeat;
-use std::borrow::Borrow;
+
 
 #[test]
 fn create_request() {
     let mut heartbeat = Heartbeat::new(
+        "",
         "0.0.0.0",
         25565,
         "TestServer",
@@ -32,12 +33,13 @@ fn create_request() {
         \"bannedIPs\":[\"192.168.0.14\"]}";
 
 
-    assert_eq!(heartbeat.build_mineonline_request(), mineonline_json);
+    assert_eq!(heartbeat.build_request(), mineonline_json);
 }
 
 #[test]
 fn update_users() {
     let mut heartbeat = Heartbeat::new(
+        "",
         "0.0.0.0",
         25565,
         "TestServer",
@@ -56,6 +58,7 @@ fn update_users() {
 #[test]
 fn update_whitelist_user() {
     let mut heartbeat = Heartbeat::new(
+        "",
         "0.0.0.0",
         25565,
         "TestServer",
@@ -75,6 +78,7 @@ fn update_whitelist_user() {
 #[test]
 fn update_whitelist_ip() {
     let mut heartbeat = Heartbeat::new(
+        "",
         "0.0.0.0",
         25565,
         "TestServer",

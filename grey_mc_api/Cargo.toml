@@ -1,14 +1,11 @@
 [package]
-name = "mojang_api"
+name = "grey_mc_api"
 version = "0.1.0"
 authors = ["Master0r0 <m.sarahgreywolf@outlook.com>"]
 edition = "2018"
 
-[lib]
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+
 [dependencies]
-reqwest = {version = "0.10.6", features = ["blocking"] }
-md5 = "0.7.0"
-rand = "0.7.3"

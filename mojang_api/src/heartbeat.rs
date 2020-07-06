@@ -1,10 +1,8 @@
 //! # Heartbeat
-//! Used for sending Minecraft Heartbeats to [Mineonline](http://mineonline.codie.gg)
+//! Used for sending Mojang Minecraft Heartbeats
 
 use rand::{thread_rng, Rng};
-use json::{parse, stringify, JsonValue};
-use json::number::Number;
-use json::object::Object;
+use rand::distributions::Alphanumeric;
 use reqwest::{Body, Url, StatusCode};
 use std::time::Instant;
 use std::borrow::Borrow;
@@ -19,21 +17,22 @@ pub struct Heartbeat {
     public: String,
     max_users: u16,
     online: String,
-    client_hash: String,
+    protocol: u16,
+    salt: String,
     users: u16,
     whitelisted: bool,
     whitelisted_users: Vec<String>,
     whitelisted_ips: Vec<String>,
     banned_users: Vec<String>,
     banned_ips: Vec<String>,
-    request: String,
+    request: Vec<(String, String)>,
 }
 
 impl Heartbeat {
     /// Create a Heartbeat Object.
     ///
     pub fn new(url: &str, ip: &str, port: u16, name: &str, public: bool, max_players: u16, online: bool,
-               client_hash: &str, whitelisted: bool) -> Self {
+               salt: &str, protocol: u16, whitelisted: bool) -> Self {
         Self {
             url: url.to_string(),
             ip: ip.to_string(),
@@ -42,14 +41,15 @@ impl Heartbeat {
             public: public.to_string(),
             max_users: max_players,
             online: online.to_string(),
-            client_hash: client_hash.to_string(),
+            protocol,
+            salt: salt.to_string(),
             users: 0,
             whitelisted,
             whitelisted_users: vec![],
             whitelisted_ips: vec![],
             banned_users: vec![],
             banned_ips: vec![],
-            request: "".to_string(),
+            request: vec![],
         }
     }
     /// Update the number of users currently connected to the server in the heartbeat.
@@ -68,41 +68,18 @@ impl Heartbeat {
         self.whitelisted_ips = wl_ips;
     }
     /// Builds the request data from the heartbeat.
-    pub fn build_request(&mut self) -> String {
-        let mut mineonline_json: Object = Object::new();
-        mineonline_json.insert("ip",
-                               JsonValue::String(String::from(&self.ip)));
-        mineonline_json.insert("port",
-                               JsonValue::String(String::from(&self.port.to_string())));
-        mineonline_json.insert("users",
-                               JsonValue::Number(Number::from(self.users)));
-        mineonline_json.insert("max",
-                               JsonValue::Number(Number::from(self.max_users)));
-        mineonline_json.insert("name",
-                               JsonValue::String(String::from(&self.name)));
-        mineonline_json.insert("onlinemode",
-                               JsonValue::String(String::from(&self.online)));
-        mineonline_json.insert("md5",
-                               JsonValue::String(String::from(&self.client_hash)));
-        mineonline_json.insert("whitelisted",
-                               JsonValue::Boolean(self.whitelisted));
-        mineonline_json.insert("whitelistUsers", JsonValue::Array(
-            self.whitelisted_users.iter()
-                .map(|x| JsonValue::String(String::from(x))).collect()));
-        mineonline_json.insert("whitelistIPs", JsonValue::Array(
-            self.whitelisted_ips.iter()
-                .map(|x| JsonValue::String(String::from(x))).collect()));
-        mineonline_json.insert("bannedUsers", JsonValue::Array(
-            self.banned_users.iter()
-                .map(|x| JsonValue::String(String::from(x))).collect()));
-        mineonline_json.insert("bannedIPs", JsonValue::Array(
-            self.banned_ips.iter()
-                .map(|x| JsonValue::String(String::from(x))).collect()));
-
-        let stringified = stringify(mineonline_json);
-        self.request = (&stringified).parse().unwrap();
-        stringified
-
+    pub fn build_request(&mut self) -> Vec<(String, String)> {
+        let mut query: Vec<(String, String)> = vec![];
+        query.push(("ip".to_string(), self.ip.to_string()));
+        query.push(("port".to_string(), self.port.to_string()));
+        query.push(("users".to_string(), self.users.to_string()));
+        query.push(("max".to_string(), self.max_users.to_string()));
+        query.push(("name".to_string(), self.name.to_string()));
+        query.push(("public".to_string(), self.public.to_string()));
+        query.push(("version".to_string(), self.protocol.to_string()));
+        query.push(("salt".to_string(), self.salt.to_string()));
+        self.request = query.clone();
+        query
     }
 
     pub fn get_user_count(&self) -> u16 {
@@ -113,15 +90,15 @@ impl Heartbeat {
         (&self.whitelisted_users, &self.whitelisted_ips)
     }
 
-    pub fn get_request(&self) -> &str {
-        &self.request
+    pub fn get_request(&self) -> Vec<(String, String)> {
+        self.request.clone()
     }
     /// Causes a heartbeat request to be made to the server
     pub fn beat(&mut self) {
         let request_client = reqwest::blocking::Client::new();
         let request = request_client.post(Url::parse(&self.url)
             .expect("Failed ot parse to URL")
-        ).header("content-type", "application/json").body(self.request.clone());
+        ).form(&self.request);
         // println!("Request: {:?}", request);
         let response = request.send().expect("Failed to make post request");
         // println!("Response: {:?}", response);

@@ -14,7 +14,9 @@ serde_derive = "1.0.114"
 fern = {version="0.6.0", features = ["colored"] }
 chrono = "0.4.12"
 log = "0.4.8"
+rand = "0.7.3"
 
 mineonline_api = {path = "../mineonline_api"}
+mojang_api = {path = "../mojang_api"}
 mc_packets = {path = "../mc_packets"}
 grey_mc_api = {path = "../grey_mc_api"}

@@ -2,10 +2,55 @@ use std::fs::read_to_string;
 use std::fs::write;
 use std::str::FromStr;
 use std::path::PathBuf;
-
+use std::io::Error;
 use serde_derive::{Deserialize, Serialize};
 use toml::{to_string, from_str};
+use log::{debug};
 
+#[derive(Serialize, Deserialize)]
+pub struct MineOnline {
+    pub active: bool,
+    pub url: String,
+}
+
+impl Default for MineOnline {
+    fn default() -> Self {
+        Self {
+            active: true,
+            url: "http://mineonline.codie.gg/mineonline/listserver.jsp".to_string()
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Mojang {
+    pub active: bool,
+    pub url: String,
+}
+
+impl Default for Mojang {
+    fn default() -> Self {
+        Self {
+            active: false,
+            url: "http://www.minecraft.net/heartbeat.jsp".to_string()
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Heartbeat {
+    pub mineonline: MineOnline,
+    pub mojang: Mojang
+}
+
+impl Default for Heartbeat {
+    fn default() -> Self {
+        Self {
+            mineonline: MineOnline::default(),
+            mojang: Mojang::default()
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
@@ -17,6 +62,7 @@ pub struct Config {
     pub online_mode: bool,
     pub whitelisted: bool,
     pub max_players: u16,
+    pub heartbeat: Heartbeat
 }
 
 impl Config {
@@ -30,7 +76,8 @@ impl Config {
             public: true,
             online_mode: true,
             whitelisted: false,
-            max_players: 8
+            max_players: 8,
+            heartbeat: Heartbeat::default(),
         };
         let out = to_string(&config)
             .expect("Failed to convert to TOML string");
@@ -40,8 +87,17 @@ impl Config {
 
     pub fn get() -> Self {
         let path = PathBuf::from_str("./server.toml").expect("Could not get path");
-        let file = &read_to_string(path).unwrap_or(Config::create());
+        let mut file = "".to_string();
+        match read_to_string(path) {
+            Ok(f) => {
+                file = f;
+            },
+            Err(e) => {
+                debug!("Error occurred reading string: {}", e);
+                file = Config::create();
+            },
+        }
 
-        from_str(file).expect("Failed to parse TOML to Config")
+        from_str(&file).expect("Failed to parse TOML to Config")
     }
 }
