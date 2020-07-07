@@ -53,7 +53,7 @@ impl Default for Heartbeat {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Config {
+pub struct Server {
     pub ip: String,
     pub port: u16,
     pub name: String,
@@ -62,13 +62,11 @@ pub struct Config {
     pub online_mode: bool,
     pub whitelisted: bool,
     pub max_players: u16,
-    pub heartbeat: Heartbeat
 }
 
-impl Config {
-    pub fn create() -> String {
-        let path = PathBuf::from_str("./server.toml").expect("Could not get path");
-        let config = Self {
+impl Default for Server {
+    fn default() -> Self {
+        Self {
             ip: "0.0.0.0".to_string(),
             port: 25565,
             name: "A Minecraft Server".to_string(),
@@ -77,6 +75,21 @@ impl Config {
             online_mode: true,
             whitelisted: false,
             max_players: 8,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Config {
+    pub server: Server,
+    pub heartbeat: Heartbeat,
+}
+
+impl Config {
+    pub fn create() -> String {
+        let path = PathBuf::from_str("./server.toml").expect("Could not get path");
+        let config = Self {
+            server: Server::default(),
             heartbeat: Heartbeat::default(),
         };
         let out = to_string(&config)

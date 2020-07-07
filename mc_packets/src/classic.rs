@@ -168,9 +168,7 @@ impl Packet<&[u8]> for ClientBound {
 
 /// Packets to be sent to servers
 pub enum ServerBound {
-    // Final Byte unused, always 0x00
-    // TODO: Implement proper identification
-    // Need to wait for Codie to drop mojang heartbeat and use exclusively mineonline
+    // Final Byte unused to make identical to ServerIdent, always 0x00
     PlayerIdentification(u8, String, String, u8),
     SetBlock(Short, Short, Short, u8, u8),
     PositionAndOrientation(u8, Short, Short, Short, u8, u8),

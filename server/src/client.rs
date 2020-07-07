@@ -59,12 +59,12 @@ impl Client {
                         debug!("{}", ver_key);
                         let config = Config::get();
                         let mut name: [u8; STRING_LENGTH] = [0x20; STRING_LENGTH];
-                        for i in 0..config.name.len() {
-                            name[i] = config.name.as_bytes()[i];
+                        for i in 0..config.server.name.len() {
+                            name[i] = config.server.name.as_bytes()[i];
                         }
                         let mut motd: [u8; STRING_LENGTH] = [0x20; STRING_LENGTH];
-                        for i in 0..config.motd.len() {
-                            motd[i] = config.motd.as_bytes()[i];
+                        for i in 0..config.server.motd.len() {
+                            motd[i] = config.server.motd.as_bytes()[i];
                         }
                         let data = Packet::into(
                             ClientBound::ServerIdentification(

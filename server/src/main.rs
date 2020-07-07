@@ -6,6 +6,7 @@ use fern::colors::{Color, ColoredLevelConfig};
 use log::{info, debug, error, warn};
 use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
+use specs::{World, WorldExt, DispatcherBuilder, Builder};
 
 use mc_packets::Packet;
 use mc_packets::classic::{ClientBound, ServerBound};
@@ -13,9 +14,11 @@ use grey_mc_api::event;
 
 mod client;
 mod config;
+mod ecs;
 
 use client::Client;
 use config::Config;
+use ecs::components::{common, player, entity};
 
 struct Server {
     ip: String,
@@ -27,9 +30,9 @@ struct Server {
     mo_heartbeat: mineonline_api::heartbeat::Heartbeat,
     m_heartbeat: mojang_api::heartbeat::Heartbeat,
     listener: TcpListener,
+    world: World,
     tx: Sender<Vec<u8>>,
     rx: Receiver<Vec<u8>>,
-    clients: Box::<Vec<Sender<Vec<u8>>>>,
     config: Config,
 }
 
@@ -37,33 +40,34 @@ impl Server {
     pub fn new() -> Self {
         let config = Config::get();
         let salt: String = thread_rng().sample_iter(&Alphanumeric).take(16).collect();
-        let listener = TcpListener::bind(format!("{}:{:#}", config.ip, config.port))
+        let listener = TcpListener::bind(format!("{}:{:#}",
+                                                 config.server.ip, config.server.port))
             .expect("Failed to bind");
 
         let mut mo_heartbeat = mineonline_api::heartbeat::Heartbeat::new(
             &config.heartbeat.mineonline.url,
-            &config.ip,
-            config.port,
-            &config.name,
-            config.public,
-            config.max_players,
-            config.online_mode,
+            &config.server.ip,
+            config.server.port,
+            &config.server.name,
+            config.server.public,
+            config.server.max_players,
+            config.server.online_mode,
             "90632803F45C15164587256A08C0ECB4",
-            config.whitelisted
+            config.server.whitelisted
         );
         mo_heartbeat.build_request();
 
         let mut m_heartbeat = mojang_api::heartbeat::Heartbeat::new(
             &config.heartbeat.mojang.url,
-            &config.ip,
-            config.port,
-            &config.name,
-            config.public,
-            config.max_players,
-            config.online_mode,
+            &config.server.ip,
+            config.server.port,
+            &config.server.name,
+            config.server.public,
+            config.server.max_players,
+            config.server.online_mode,
             &salt,
             7,
-            config.whitelisted
+            config.server.whitelisted
         );
         m_heartbeat.build_request();
         if config.heartbeat.mineonline.active {
@@ -74,26 +78,26 @@ impl Server {
         }
 
         let (tx, rx) = flume::unbounded::<Vec<u8>>();
-        info!("Server Running at {}:{:#}", config.ip, config.port);
+        info!("Server Running at {}:{:#}", config.server.ip, config.server.port);
         // heartbeat.beat();
         Self {
-            ip: config.ip,
-            port: config.port,
-            name: config.name,
-            motd: config.motd,
+            ip: config.server.ip,
+            port: config.server.port,
+            name: config.server.name,
+            motd: config.server.motd,
             protocol: 7,
             salt,
             mo_heartbeat,
             m_heartbeat,
             listener,
+            world: ecs::initialise_world(),
             tx,
             rx,
-            clients: Box::new(Vec::new()),
             config: Config::get(),
         }
     }
 
-    fn game_loop(mut self) {
+    /*fn game_loop(mut self) {
         spawn(move || loop {
             let received = self.rx.try_recv().expect("Failed to receive");
             debug!("FUCK");
@@ -131,9 +135,10 @@ impl Server {
                 self.m_heartbeat.beat();
             }
         });
-    }
+    }*/
 
-    fn listen(mut self) -> Result<(), std::io::Error> {
+    // Old
+    /*fn listen(mut self) -> Result<(), std::io::Error> {
         let mut incoming = self.listener.incoming();
         while let Some(conn) = incoming.next() {
             let mut tx = self.tx.clone();
@@ -147,10 +152,26 @@ impl Server {
                 client.handle_connect().expect("Failed to handle exception");
             });
         }
-        self.game_loop();
+        Ok(())
+    }*/
+
+    fn listen(mut self) -> Result<(), std::io::Error> {
+        let listener = self.listener.try_clone()
+            .expect("Failed to clone listener");
+        let mut incoming = listener.incoming();
+        while let Some(conn) = incoming.next() {
+            self.world.create_entity()
+                .with(common::Pos::default())
+                .with(player::Player::default())
+                .with(entity::DeltaVel::default())
+                .with(entity::Rotation::default())
+                .with(player::Stream::new(conn.unwrap()))
+                .build();
+        }
         Ok(())
     }
 }
+
 fn main() -> Result<(), std::io::Error> {
     let colors = ColoredLevelConfig::new()
         .info(Color::Magenta)
