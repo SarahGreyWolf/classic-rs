@@ -10,6 +10,7 @@ type Short = i16;
 type ByteArray = [u8; 1024];
 type MString = [u8; 64];
 
+#[derive(Debug)]
 /// Packets to be sent to the clients
 pub enum ClientBound {
     ServerIdentification(u8, MString, MString, u8),

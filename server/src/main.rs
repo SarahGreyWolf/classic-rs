@@ -9,13 +9,14 @@ use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
 use specs::{World, WorldExt, DispatcherBuilder, Builder};
 use backtrace::Backtrace;
+use std::sync::{Arc, Mutex};
 
 use std::fs::File;
 use std::io::{BufReader, Read};
 
 use mc_packets::Packet;
 use mc_packets::classic::{ClientBound, ServerBound};
-use mc_worlds::classic::MineWorld;
+use mc_worlds::classic::ClassicWorld;
 use grey_mc_api::event;
 
 mod client;
@@ -32,7 +33,8 @@ struct Server {
     mo_heartbeat: mineonline_api::heartbeat::Heartbeat,
     m_heartbeat: mojang_api::heartbeat::Heartbeat,
     client_rx: Receiver<Client>,
-    world: World,
+    world: Arc<Mutex<ClassicWorld>>,
+    ecs_world: World,
     config: Config,
     clients: Vec<Client>,
 }
@@ -76,16 +78,16 @@ impl Server {
         }
 
         let (tx, rx) = flume::unbounded::<Client>();
-        let ip = config.server.ip.clone();
+        let local_ip = config.server.local_ip.clone();
         let port = config.server.port.clone();
         let tx_clone = tx.clone();
         core::mem::forget(tx);
         tokio::spawn(async move {
-            let listener = TcpListener::bind(format!("{}:{:#}", ip, port)).
+            let listener = TcpListener::bind(format!("{}:{:#}", local_ip, port)).
                 await.expect("Failed to bind");
             Server::listen(listener, tx_clone).await.expect("Failed to listen");
         });
-        let mut world = ecs::initialise_world();
+        let mut ecs_world = ecs::initialise_world();
         // let mut dispatcher = DispatcherBuilder::new()
         //     .with(ecs::systems::NetworkReadSys, "net_sys", &[]).build();
         // dispatcher.setup(&mut world);
@@ -98,7 +100,8 @@ impl Server {
             mo_heartbeat,
             m_heartbeat,
             client_rx: rx,
-            world,
+            world: Arc::new(Mutex::new(ClassicWorld::new(&"SarahWorld",10, 2, 10))),
+            ecs_world,
             config: Config::get(),
             clients: Vec::new(),
         }
@@ -145,10 +148,13 @@ impl Server {
             }
         }
         for c_pos in 0..self.clients.len() {
-            match self.clients[c_pos].handle_connect().await {
+            match self.clients[c_pos].handle_connect(self.world.clone()).await {
                 Ok(_) => {},
                 Err(e) => {
                     if e.kind() == tokio::io::ErrorKind::ConnectionReset {
+                        info!("Player {} has disconnected", self.clients[c_pos].username);
+                        self.clients.remove(c_pos);
+                    } else if e.kind() == tokio::io::ErrorKind::ConnectionAborted {
                         info!("Player {} has disconnected", self.clients[c_pos].username);
                         self.clients.remove(c_pos);
                     }else {
@@ -159,7 +165,8 @@ impl Server {
         }
     }
 
-    async fn listen(mut listener: TcpListener, tx: Sender<Client>) -> Result<(), tokio::io::Error> {
+    async fn listen(mut listener: TcpListener, tx: Sender<Client>)
+        -> Result<(), tokio::io::Error> {
         let mut id: u16 = 0;
         while let Ok((stream, addr)) = listener.accept().await {
             let client = Client::new(id, stream).await;
@@ -213,8 +220,8 @@ async fn init_logging() -> Result<(), tokio::io::Error> {
         .unwrap();
     std::panic::set_hook(Box::new(|panic_info| {
         error!("{}", panic_info.to_string());
-        let backtrace = Backtrace::new();
-        error!("{}\n{:?}", panic_info.to_string(), backtrace);
+        // let backtrace = Backtrace::new();
+        // error!("{}\n{:?}", panic_info.to_string(), backtrace);
     }));
 
     Ok(())
