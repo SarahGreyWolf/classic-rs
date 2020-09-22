@@ -11,7 +11,7 @@ use std::io::Write;
 
 const STRING_LENGTH: usize = 64;
 
-struct NetworkReadSys;
+pub struct NetworkReadSys;
 
 impl<'a> System<'a> for NetworkReadSys {
     type SystemData = (WriteStorage<'a, Stream>, WriteStorage<'a, Pos>, WriteStorage<'a, Rotation>,
@@ -20,6 +20,7 @@ impl<'a> System<'a> for NetworkReadSys {
     fn run(&mut self, (mut stream, mut pos, mut rot, mut delta, mut player): Self::SystemData) {
         for (stream, pos, rot, delta, player)
             in (&mut stream, &mut pos, &mut rot, &mut delta, &mut player).join() {
+            debug!("Doing a thing");
             let mut buffer = [0 as u8; 1460];
             stream.0.peek(&mut buffer).expect("Failed to peek at incoming");
 

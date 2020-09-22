@@ -22,12 +22,12 @@ pub struct Client {
 }
 
 impl Client {
-    pub async fn new(id: u16, sock: Result<TcpStream, tokio::io::Error>) -> Self {
+    pub async fn new(id: u16, sock: TcpStream) -> Self {
         Self {
             username: "".to_string(),
             id,
             user_type: 0x00,
-            socket: sock.expect("Failed to get socket"),
+            socket: sock,
             current_x: 0,
             current_y: 0,
             current_z: 0
@@ -71,10 +71,11 @@ impl Client {
                 self.socket.write_all(Packet::into(ClientBound::LevelInitialize).as_slice())
                     .await
                     .expect("Failed to write data");
-                self.socket.write_all(Packet::into(ClientBound::LevelFinalize(50, 50, 50))
-                    .as_slice())
-                    .await
-                    .expect("Failed to write data");
+
+                // self.socket.write_all(Packet::into(ClientBound::LevelFinalize(50, 50, 50))
+                //     .as_slice())
+                //     .await
+                //     .expect("Failed to write data");
             }
             ServerBound::SetBlock(_, _, _, _, _) => {}
             ServerBound::PositionAndOrientation(

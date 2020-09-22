@@ -1,39 +1,22 @@
-use specs::{VecStorage, Component};
+use specs::{VecStorage, Component, FlaggedStorage};
 
+#[derive(Default)]
 pub struct DeltaVel {
     dx: i8,
     dy: i8,
     dz: i8,
 }
 
-impl Default for DeltaVel {
-    fn default() -> Self {
-        Self {
-            dx: 0,
-            dy: 0,
-            dz: 0,
-        }
-    }
-}
-
 impl Component for DeltaVel {
-    type Storage = VecStorage<Self>;
+    type Storage = FlaggedStorage<Self, VecStorage<Self>>;
 }
 
+#[derive(Default)]
 pub struct Rotation {
-    pub(crate) yaw: u8,
-    pub(crate) pitch: u8,
-}
-
-impl Default for Rotation {
-    fn default() -> Self {
-        Self {
-            yaw: 0,
-            pitch: 0,
-        }
-    }
+    pub yaw: u8,
+    pub pitch: u8,
 }
 
 impl Component for Rotation {
-    type Storage = VecStorage<Self>;
+    type Storage = FlaggedStorage<Self, VecStorage<Self>>;
 }
