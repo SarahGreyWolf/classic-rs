@@ -14,3 +14,4 @@ reqwest = {version = "0.10.6", features = ["json", "blocking"] }
 md5 = "0.7.0"
 rand = "0.7.3"
 json = "0.12.4"
+log = "0.4.11"

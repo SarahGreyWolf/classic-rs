@@ -1,14 +1,11 @@
 //! # Heartbeat
 //! Used for sending Minecraft Heartbeats to [Mineonline](http://mineonline.codie.gg)
 
-use rand::{thread_rng, Rng};
 use json::{parse, stringify, JsonValue};
 use json::number::Number;
 use json::object::Object;
 use reqwest::{Body, Url, StatusCode};
-use std::time::Instant;
-use std::borrow::Borrow;
-use std::thread;
+use log::{debug};
 
 /// Heartbeat Object
 pub struct Heartbeat {
@@ -24,8 +21,10 @@ pub struct Heartbeat {
     whitelisted: bool,
     whitelisted_users: Vec<String>,
     whitelisted_ips: Vec<String>,
+    whitelisted_uuids: Vec<String>,
     banned_users: Vec<String>,
     banned_ips: Vec<String>,
+    banned_uuids: Vec<String>,
     request: String,
 }
 
@@ -47,8 +46,10 @@ impl Heartbeat {
             whitelisted,
             whitelisted_users: vec![],
             whitelisted_ips: vec![],
+            whitelisted_uuids: vec![],
             banned_users: vec![],
             banned_ips: vec![],
+            banned_uuids: vec![],
             request: "".to_string(),
         }
     }
@@ -58,14 +59,16 @@ impl Heartbeat {
     }
 
     /// Update the servers ban list in the heartbeat.
-    pub fn update_bans(&mut self, banned_users: Vec<String>, banned_ips: Vec<String>) {
+    pub fn update_bans(&mut self, banned_users: Vec<String>, banned_ips: Vec<String>, banned_uuids: Vec<String>) {
         self.banned_users = banned_users;
         self.banned_ips = banned_ips;
+        self.banned_uuids = banned_uuids;
     }
     /// Update the servers whitelist in the heartbeat.
-    pub fn update_whitelist(&mut self, wl_users: Vec<String>, wl_ips: Vec<String>) {
+    pub fn update_whitelist(&mut self, wl_users: Vec<String>, wl_ips: Vec<String>, wl_uuids: Vec<String>) {
         self.whitelisted_users = wl_users;
         self.whitelisted_ips = wl_ips;
+        self.whitelisted_uuids = wl_uuids;
     }
     /// Builds the request data from the heartbeat.
     pub fn build_request(&mut self) -> String {
@@ -92,12 +95,20 @@ impl Heartbeat {
         mineonline_json.insert("whitelistIPs", JsonValue::Array(
             self.whitelisted_ips.iter()
                 .map(|x| JsonValue::String(String::from(x))).collect()));
+        mineonline_json.insert("whitelistUUIDs", JsonValue::Array(
+            self.whitelisted_uuids.iter()
+                .map(|x| JsonValue::String(String::from(x))).collect()));
         mineonline_json.insert("bannedUsers", JsonValue::Array(
             self.banned_users.iter()
                 .map(|x| JsonValue::String(String::from(x))).collect()));
         mineonline_json.insert("bannedIPs", JsonValue::Array(
             self.banned_ips.iter()
                 .map(|x| JsonValue::String(String::from(x))).collect()));
+        mineonline_json.insert("bannedUUIDs", JsonValue::Array(
+            self.banned_uuids.iter()
+                .map(|x| JsonValue::String(String::from(x))).collect()));
+        // TODO: Support Players List
+        // TODO: Support Owner Name
 
         let stringified = stringify(mineonline_json);
         self.request = (&stringified).parse().unwrap();
@@ -117,13 +128,13 @@ impl Heartbeat {
         &self.request
     }
     /// Causes a heartbeat request to be made to the server
-    pub fn beat(&mut self) {
-        let request_client = reqwest::blocking::Client::new();
+    pub async fn beat(&mut self) {
+        let request_client = reqwest::Client::new();
         let request = request_client.post(Url::parse(&self.url)
             .expect("Failed ot parse to URL")
         ).header("content-type", "application/json").body(self.request.clone());
         // println!("Request: {:?}", request);
-        let response = request.send().expect("Failed to make post request");
+        let response = request.send().await.expect("Failed to make post request");
         // println!("Response: {:?}", response);
         if response.status() != StatusCode::OK {
             panic!("Heartbeat Request Failed: {}", response.status());

@@ -1,5 +1,8 @@
 /target
 /.idea
+/logs
 *.ig
 Cargo.lock
 server.toml
+*.java
+*.mine

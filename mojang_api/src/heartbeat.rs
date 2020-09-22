@@ -2,11 +2,7 @@
 //! Used for sending Mojang Minecraft Heartbeats
 
 use rand::{thread_rng, Rng};
-use rand::distributions::Alphanumeric;
 use reqwest::{Body, Url, StatusCode};
-use std::time::Instant;
-use std::borrow::Borrow;
-use std::thread;
 
 /// Heartbeat Object
 pub struct Heartbeat {
@@ -94,13 +90,13 @@ impl Heartbeat {
         self.request.clone()
     }
     /// Causes a heartbeat request to be made to the server
-    pub fn beat(&mut self) {
-        let request_client = reqwest::blocking::Client::new();
+    pub async fn beat(&mut self) {
+        let request_client = reqwest::Client::new();
         let request = request_client.post(Url::parse(&self.url)
             .expect("Failed ot parse to URL")
         ).form(&self.request);
         // println!("Request: {:?}", request);
-        let response = request.send().expect("Failed to make post request");
+        let response = request.send().await.expect("Failed to make post request");
         // println!("Response: {:?}", response);
         if response.status() != StatusCode::OK {
             panic!("Heartbeat Request Failed: {}", response.status());
