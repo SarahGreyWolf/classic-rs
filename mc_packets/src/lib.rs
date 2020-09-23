@@ -10,5 +10,5 @@ pub trait Packet<T> {
     /// Get a Packet from a buffer
     fn from(buffer: T) -> Self;
     /// Create a buffer of Vec<u8> from a packet
-    fn into(self) -> Vec<u8>;
+    fn into(&self) -> Vec<u8>;
 }

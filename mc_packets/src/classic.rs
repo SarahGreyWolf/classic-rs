@@ -35,18 +35,18 @@ impl Packet<&[u8]> for ClientBound {
         unimplemented!()
     }
 
-    fn into(self) -> Vec<u8> {
+    fn into(&self) -> Vec<u8> {
         match self {
             ClientBound::ServerIdentification(prot_v, server_name, server_motd, u_type) => {
                 let mut s_identification: Vec<u8> = vec![0x00];
-                s_identification.push(prot_v);
+                s_identification.push(*prot_v);
                 for x in 0..server_name.len() {
                     s_identification.push(server_name[x]);
                 }
                 for x in 0..server_motd.len() {
                     s_identification.push(server_motd[x]);
                 }
-                s_identification.push(u_type);
+                s_identification.push(*u_type);
                 s_identification
             },
             ClientBound::Ping => {
@@ -58,96 +58,96 @@ impl Packet<&[u8]> for ClientBound {
             ClientBound::LevelDataChunk(chunk_length, chunk_data, p_complete) => {
                 let mut level_data_chunk: Vec<u8> = vec![0x03];
                 level_data_chunk.push((chunk_length >> 8) as u8);
-                level_data_chunk.push(chunk_length as u8);
+                level_data_chunk.push(*chunk_length as u8);
                 for x in chunk_data.to_vec() {
                     level_data_chunk.push(x);
                 }
-                level_data_chunk.push(p_complete);
+                level_data_chunk.push(*p_complete);
                 level_data_chunk
             },
             ClientBound::LevelFinalize(width, height, depth) => {
                 let mut level_finalize: Vec<u8> = vec![0x04];
                 level_finalize.push((width >> 8) as u8);
-                level_finalize.push(width as u8);
+                level_finalize.push(*width as u8);
                 level_finalize.push((height >> 8) as u8);
-                level_finalize.push(height as u8);
+                level_finalize.push(*height as u8);
                 level_finalize.push((depth >> 8) as u8);
-                level_finalize.push(depth as u8);
+                level_finalize.push(*depth as u8);
                 level_finalize
             },
             ClientBound::SetBlock(x, y, z, block) => {
                 let mut set_block: Vec<u8> = vec![0x06];
                 set_block.push((x >> 8) as u8);
-                set_block.push(x as u8);
+                set_block.push(*x as u8);
                 set_block.push((y >> 8) as u8);
-                set_block.push(y as u8);
+                set_block.push(*y as u8);
                 set_block.push((z >> 8) as u8);
-                set_block.push(z as u8);
-                set_block.push(block);
+                set_block.push(*z as u8);
+                set_block.push(*block);
                 set_block
             },
             ClientBound::SpawnPlayer(
                 origin_p_id, origin_p_name, x, y, z, yaw, pitch) => {
                 let mut spawn_player: Vec<u8> = vec![0x07];
-                spawn_player.push(origin_p_id as u8);
+                spawn_player.push(*origin_p_id as u8);
                 for x in 0..origin_p_name.len() {
                     spawn_player.push(origin_p_name[x])
                 }
                 spawn_player.push((x >> 8) as u8);
-                spawn_player.push(x as u8);
+                spawn_player.push(*x as u8);
                 spawn_player.push((y >> 8) as u8);
-                spawn_player.push(y as u8);
+                spawn_player.push(*y as u8);
                 spawn_player.push((z >> 8) as u8);
-                spawn_player.push(z as u8);
-                spawn_player.push(yaw);
-                spawn_player.push(pitch);
+                spawn_player.push(*z as u8);
+                spawn_player.push(*yaw);
+                spawn_player.push(*pitch);
                 spawn_player
             },
             ClientBound::PlayerTeleport(origin_p_id, x, y, z, yaw, pitch) => {
                 let mut player_teleport: Vec<u8> = vec![0x08];
-                player_teleport.push(origin_p_id.try_into().unwrap());
+                player_teleport.push(*origin_p_id as u8);
                 player_teleport.push((x >> 8) as u8);
-                player_teleport.push(x as u8);
+                player_teleport.push(*x as u8);
                 player_teleport.push((y >> 8) as u8);
-                player_teleport.push(y as u8);
+                player_teleport.push(*y as u8);
                 player_teleport.push((z >> 8) as u8);
-                player_teleport.push(z as u8);
-                player_teleport.push(yaw);
-                player_teleport.push(pitch);
+                player_teleport.push(*z as u8);
+                player_teleport.push(*yaw);
+                player_teleport.push(*pitch);
                 player_teleport
             },
             ClientBound::PositionAndOrientationUpdate(
                 origin_p_id, x_change, y_change, z_change, yaw, pitch)=> {
                 let mut pos_orient_update: Vec<u8> = vec![0x09];
-                pos_orient_update.push(origin_p_id.try_into().unwrap());
-                pos_orient_update.push(x_change.try_into().unwrap());
-                pos_orient_update.push(y_change.try_into().unwrap());
-                pos_orient_update.push(z_change.try_into().unwrap());
-                pos_orient_update.push(yaw);
-                pos_orient_update.push(pitch);
+                pos_orient_update.push(*origin_p_id as u8);
+                pos_orient_update.push(*x_change  as u8);
+                pos_orient_update.push(*y_change as u8);
+                pos_orient_update.push(*z_change as u8);
+                pos_orient_update.push(*yaw);
+                pos_orient_update.push(*pitch);
                 pos_orient_update
             },
             ClientBound::PositionUpdate(origin_p_id, x_change, y_change, z_change) => {
                 let mut pos_update: Vec<u8> = vec![0x0A];
-                pos_update.push(origin_p_id.try_into().unwrap());
-                pos_update.push(x_change.try_into().unwrap());
-                pos_update.push(y_change.try_into().unwrap());
-                pos_update.push(z_change.try_into().unwrap());
+                pos_update.push(*origin_p_id as u8);
+                pos_update.push(*x_change as u8);
+                pos_update.push(*y_change as u8);
+                pos_update.push(*z_change as u8);
                 pos_update
             },
             ClientBound::OrientationUpdate(origin_p_id, yaw, pitch) => {
                 let mut orient_update: Vec<u8> = vec![0x0B];
-                orient_update.push(origin_p_id.try_into().unwrap());
-                orient_update.push(yaw);
-                orient_update.push(pitch);
+                orient_update.push(*origin_p_id as u8);
+                orient_update.push(*yaw);
+                orient_update.push(*pitch);
                 orient_update
             },
             ClientBound::DespawnPlayer(origin_p_id) => {
-                vec![0x0C, origin_p_id.try_into().unwrap()]
+                vec![0x0C, *origin_p_id as u8]
             },
             ClientBound::Message(origin_p_id, msg) => {
                 let mut message: Vec<u8> = vec![0x0D];
-                message.push(origin_p_id.try_into().unwrap());
+                message.push(*origin_p_id as u8);
                 for x in 0..msg.len(){
                     message.push(msg[x]);
                 }
@@ -161,7 +161,7 @@ impl Packet<&[u8]> for ClientBound {
                 disconnect_player
             },
             ClientBound::UpdateUserType(u_type) => {
-                vec![0x0F, u_type]
+                vec![0x0F, *u_type]
             }
         }
     }
@@ -231,7 +231,7 @@ impl Packet<&[u8]> for ServerBound {
         }
     }
 
-    fn into(self) -> Vec<u8> {
+    fn into(&self) -> Vec<u8> {
         unimplemented!()
     }
 }

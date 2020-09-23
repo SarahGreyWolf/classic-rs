@@ -47,22 +47,24 @@ impl Client {
 
     pub async fn handle_connect(&mut self, world: Arc<Mutex<ClassicWorld>>) -> Result<(), tokio::io::Error> {
         let mut world_lock = world.try_lock().unwrap();
-        let mut buffer = [0 as u8; 1460];
-        self.socket.read(&mut buffer).await?;
+        let mut receive_buffer = [0 as u8; 1460];
+        let mut send_index: u8 = 0;
+        self.socket.read(&mut receive_buffer).await?;
 
-        let mut incoming_packets: Vec<ServerBound> = Vec::new();
+        let mut serverbound_packets: Vec<ServerBound> = Vec::new();
+        let mut clientbound_packets: Vec<ClientBound> = Vec::new();
 
-        match buffer[0] {
+        match receive_buffer[0] {
             0x08 => {
-                incoming_packets.push(Packet::from(&buffer[0..10]));
-                incoming_packets.push(Packet::from(&buffer[10..]));
+                serverbound_packets.push(Packet::from(&receive_buffer[0..10]));
+                serverbound_packets.push(Packet::from(&receive_buffer[10..]));
             }
             _ => {
-                incoming_packets.push(Packet::from(buffer.as_ref()));
+                serverbound_packets.push(Packet::from(receive_buffer.as_ref()));
             }
         }
 
-        for packet in incoming_packets {
+        for packet in serverbound_packets {
             match packet {
                 ServerBound::PlayerIdentification(protocol, username,
                                                   ver_key, _) => {
@@ -79,29 +81,38 @@ impl Client {
                         for i in 0..config.server.motd.len() {
                             motd[i] = config.server.motd.as_bytes()[i];
                         }
-                        self.socket_write(ClientBound::ServerIdentification(
+                        self.write_packets(vec![ClientBound::ServerIdentification(
                             7,
                             name,
                             motd,
                             0x00,
-                        )).await;
-                        self.socket_write(ClientBound::LevelInitialize).await;
+                        ), ClientBound::LevelInitialize]).await;
                         self.send_blocks(world_lock.deref()).await.expect("Failed to send blocks");
                         let size = world_lock.get_size();
-                        self.socket_write(ClientBound::LevelFinalize(size[0], size[1], size[2]))
-                            .await;
-
-                        self.socket_write(ClientBound::SpawnPlayer(
-                            -1, self.get_username_as_bytes(), 0, 0, 0, 0, 0
-                        )).await;
+                        self.write_packets(vec![ClientBound::LevelFinalize(size[0], size[1], size[2]),
+                                                ClientBound::SpawnPlayer(
+                                                    -1,
+                                                    self.get_username_as_bytes(),
+                                                    world_lock.get_size()[0]/2,
+                                                    world_lock.get_size()[1],
+                                                    world_lock.get_size()[2]/2,
+                                                    0,
+                                                    0
+                                                )]).await;
                     }
                 }
                 ServerBound::SetBlock(x, y, z, mode, block) => {
-                    let block = Block::from(block);
+                    let block = Block::from(block).clone();
                     if mode == 0x00 {
                         world_lock.set_block(x, y, z, Block::Air.into());
+                        self.write_packets(vec![
+                            ClientBound::SetBlock(x, y, z, Block::Air.into())
+                        ]).await;
                     } else {
                         world_lock.set_block(x, y, z, block.into());
+                        self.write_packets(vec![
+                            ClientBound::SetBlock(x, y, z, block.into())
+                        ]).await;
                     }
                 }
                 ServerBound::PositionAndOrientation(
@@ -117,13 +128,13 @@ impl Client {
                     info!("{}: {}", self.username, message);
                 }
                 ServerBound::UnknownPacket => {
-                    let msg = String::from_utf8(buffer.to_vec())
+                    let msg = String::from_utf8(receive_buffer.to_vec())
                         .expect("Invalid utf8 Message");
                     debug!("{}: {}", self.username, msg);
                 }
             }
         }
-        self.socket_write(ClientBound::Ping).await;
+        self.write_packets(vec![ClientBound::Ping]).await;
         // let received = self.rx.try_recv().unwrap_or(vec![]);
         // debug!("{:x?}", received);
         Ok(())
@@ -149,22 +160,52 @@ impl Client {
                                                                ((sent / compressed.len()) * 100) as u8);
                 sent += 1024;
                 left -= 1024;
-                self.socket_write(world_packet).await;
+                self.write_packets(vec![world_packet]).await;
             }else {
                 // let world_packet = ClientBound::LevelDataChunk(left as i16, send_buffer, progress);
                 sent += left;
                 left = 0;
                 let world_packet = ClientBound::LevelDataChunk(1024, send_buffer,
                                                                ((sent / compressed.len()) * 100) as u8);
-                self.socket_write(world_packet).await;
+                self.write_packets(vec![world_packet]).await;
             }
         }
 
         Ok(())
     }
 
-    async fn socket_write(&mut self, packet: ClientBound) {
-        match self.socket.write_all(Packet::into(packet).as_slice()).await {
+    async fn write_packets(&mut self, packets: Vec<ClientBound>) {
+        let mut packet_buffer: [u8; 1460] = [0u8; 1460];
+        let mut buffer_filled: usize = 0;
+
+        for p in 0..packets.len() {
+            let c_packet = Packet::into(&packets[p]);
+            let c_slice = c_packet.as_slice();
+            if c_slice.len() > (1460 - buffer_filled) {
+                match self.socket.write_all(&packet_buffer[0..buffer_filled]).await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        if e.kind() == ErrorKind::ConnectionAborted {
+                            info!("Player {} Lost Connection", self.username);
+                        } else {
+                            panic!("Error: {:?}", e);
+                        }
+                    }
+                }
+                buffer_filled = 0;
+                packet_buffer = [0u8; 1460];
+            }
+            let mut s_index = 0;
+            for i in buffer_filled..1460 {
+                if s_index < c_slice.len() {
+                    packet_buffer[i] = c_slice[s_index];
+                    s_index += 1;
+                } else {break;}
+            }
+            buffer_filled += c_slice.len();
+        }
+
+        match self.socket.write_all(&packet_buffer[0..buffer_filled]).await {
             Ok(_) => {}
             Err(e) => {
                 if e.kind() == ErrorKind::ConnectionAborted {

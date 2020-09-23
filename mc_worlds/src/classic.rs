@@ -1,6 +1,6 @@
 use byteorder::{LittleEndian};
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum Block {
     Air,
     Stone,
@@ -286,10 +286,14 @@ impl ClassicWorld {
     }
 
     pub fn set_block(&mut self, x: i16, y: i16, z: i16, block: Block) {
-        self.block_array[(x*y*z) as usize] = block.into();
+        let pos = x + (self.x * z) + ((self.z * self.x)  * y);
+        if y < self.y {
+            self.block_array[pos as usize] = block.into();
+        }
     }
     pub fn get_block(&mut self, x: i16, y: i16, z: i16) -> Block {
-        self.block_array[(x*y*z) as usize].into()
+        let pos = x + (self.x * z) + ((self.z * self.x)  * y);
+        self.block_array[pos as usize].into()
     }
 }
 
