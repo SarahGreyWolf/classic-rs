@@ -15,9 +15,11 @@ fn create_request() {
         true
     );
     heartbeat.update_whitelist(vec!["SarahGreyWolf".to_string()],
-                               vec!["192.168.0.14".to_string()]);
+                               vec!["192.168.0.14".to_string()],
+                            vec![]);
     heartbeat.update_bans(vec!["SarahGreyWolf".to_string()],
-                          vec!["192.168.0.14".to_string()]);
+                          vec!["192.168.0.14".to_string()],
+                          vec![]);
     heartbeat.update_users(2);
     let mineonline_json = "{\"ip\":\"0.0.0.0\",\
         \"port\":\"25565\",\
@@ -29,8 +31,10 @@ fn create_request() {
         \"whitelisted\":true,\
         \"whitelistUsers\":[\"SarahGreyWolf\"],\
         \"whitelistIPs\":[\"192.168.0.14\"],\
+        \"whitelistUUIDs\":[\"192.168.0.14\"],\
         \"bannedUsers\":[\"SarahGreyWolf\"],\
-        \"bannedIPs\":[\"192.168.0.14\"]}";
+        \"bannedIPs\":[\"192.168.0.14\"]},\
+        \"bannedUUIDs\":[\"192.168.0.14\"]}";
 
 
     assert_eq!(heartbeat.build_request(), mineonline_json);
@@ -71,7 +75,7 @@ fn update_whitelist_user() {
     let mut whitelisted_users: Vec<String> = Vec::new();
     assert_eq!(heartbeat.get_whitelist().0, &whitelisted_users);
     whitelisted_users.push("SarahGreyWolf".to_string());
-    heartbeat.update_whitelist(vec!["SarahGreyWolf".to_string()],Vec::new());
+    heartbeat.update_whitelist(vec!["SarahGreyWolf".to_string()],Vec::new(), Vec::new());
     assert_eq!(heartbeat.get_whitelist().0, &whitelisted_users);
 }
 
@@ -91,6 +95,6 @@ fn update_whitelist_ip() {
     let mut whitelisted_ips: Vec<String> = Vec::new();
     assert_eq!(heartbeat.get_whitelist().1, &whitelisted_ips);
     whitelisted_ips.push("127.0.0.1".to_string());
-    heartbeat.update_whitelist(vec!["127.0.0.1".to_string()],Vec::new());
+    heartbeat.update_whitelist(Vec::new(),vec!["127.0.0.1".to_string()], Vec::new());
     assert_eq!(heartbeat.get_whitelist().1, &whitelisted_ips);
 }

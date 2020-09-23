@@ -79,6 +79,11 @@ pub struct ClassicWorld {
 impl ClassicWorld {
     //! Create a new empty world with a name aswell as dimensions
     pub fn new(name: &str, x: i16, y: i16, z: i16) -> Self {
+
+        let mut block_array: Vec<u8> = (0..(x*y*z)).map(|k| 0x00).collect();
+        for i in 0..x*z {
+            block_array[i as usize] = 0x01;
+        }
         Self {
             format_version: 1,
             name: name.to_string(),
@@ -98,7 +103,7 @@ impl ClassicWorld {
                 h: 0,
                 p: 0
             },
-            block_array: (0..(x*y*z)).map(|x| 1).collect()
+            block_array
         }
     }
 

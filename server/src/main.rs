@@ -100,7 +100,7 @@ impl Server {
             mo_heartbeat,
             m_heartbeat,
             client_rx: rx,
-            world: Arc::new(Mutex::new(ClassicWorld::new(&"SarahWorld",10, 2, 10))),
+            world: Arc::new(Mutex::new(ClassicWorld::new(&"SarahWorld",10, 5, 10))),
             ecs_world,
             config: Config::get(),
             clients: Vec::new(),

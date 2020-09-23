@@ -167,6 +167,7 @@ impl Packet<&[u8]> for ClientBound {
     }
 }
 
+#[derive(Debug)]
 /// Packets to be sent to servers
 pub enum ServerBound {
     // Final Byte unused to make identical to ServerIdent, always 0x00

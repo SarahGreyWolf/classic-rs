@@ -22,7 +22,6 @@ pub struct Client {
     id: u16,
     // The rank of the user, 0x64 for op, 0x00 for normal
     user_type: u8,
-    handled: bool,
     socket: TcpStream,
     current_x: i16,
     current_y: i16,
@@ -35,7 +34,6 @@ impl Client {
             username: "".to_string(),
             id,
             user_type: 0x00,
-            handled: false,
             socket: sock,
             current_x: 0,
             current_y: 0,
@@ -56,8 +54,7 @@ impl Client {
         match incoming_packet {
             ServerBound::PlayerIdentification(protocol, username,
                                               ver_key, _) => {
-                if !self.handled {
-                    self.handled = true;
+                if protocol != 0 {
                     self.username = username;
                     debug!("{}", self.username);
                     debug!("{}", ver_key);
@@ -106,9 +103,10 @@ impl Client {
                 let msg = String::from_utf8(buffer.to_vec())
                     .expect("Invalid utf8 Message");
                 debug!("{}", msg);
-                self.socket.write(&[]).await.unwrap();
             }
         }
+        self.socket.write_all(Packet::into(ClientBound::Ping).as_slice()).await
+            .expect("Failed to write ping");
         // let received = self.rx.try_recv().unwrap_or(vec![]);
         // debug!("{:x?}", received);
         Ok(())
@@ -116,7 +114,7 @@ impl Client {
 
     async fn send_blocks(&mut self, world: &ClassicWorld) -> Result<(), tokio::io::Error> {
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        encoder.write(&[world.get_blocks().len() as u8]).unwrap();
+        encoder.write(&(world.get_blocks().len() as u32).to_be_bytes()).unwrap();
         encoder.write_all(world.get_blocks()).unwrap();
         let compressed = encoder.finish().expect("Failed to compress data");
         let mut sent: usize = 0;
