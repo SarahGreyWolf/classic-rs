@@ -100,7 +100,7 @@ impl Server {
             mo_heartbeat,
             m_heartbeat,
             client_rx: rx,
-            world: Arc::new(Mutex::new(ClassicWorld::new(&"SarahWorld",10, 5, 10))),
+            world: Arc::new(Mutex::new(ClassicWorld::new(&"SarahWorld",10, 20, 10))),
             ecs_world,
             config: Config::get(),
             clients: Vec::new(),
@@ -148,32 +148,35 @@ impl Server {
             }
         }
         for c_pos in 0..self.clients.len() {
+            let mut closed = false;
             match self.clients[c_pos].handle_connect(self.world.clone()).await {
                 Ok(_) => {},
                 Err(e) => {
                     if e.kind() == tokio::io::ErrorKind::ConnectionReset {
                         info!("Player {} has disconnected", self.clients[c_pos].username);
-                        self.clients.remove(c_pos);
+                        closed = true;
                     } else if e.kind() == tokio::io::ErrorKind::ConnectionAborted {
                         info!("Player {} has disconnected", self.clients[c_pos].username);
-                        self.clients.remove(c_pos);
+                        closed = true;
                     }else {
                         panic!("{}", e);
                     }
                 }
+            }
+            if closed {
+                self.clients.remove(c_pos);
             }
         }
     }
 
     async fn listen(mut listener: TcpListener, tx: Sender<Client>)
         -> Result<(), tokio::io::Error> {
-        let mut id: u16 = 0;
+        let mut id: i8 = 0;
         while let Ok((stream, addr)) = listener.accept().await {
             let client = Client::new(id, stream).await;
             if tx.send(client).is_err() {
                 panic!("Failed to send client");
             }
-            info!("{:#}", id);
             id += 1;
         }
         Ok(())

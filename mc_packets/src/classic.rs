@@ -89,7 +89,7 @@ impl Packet<&[u8]> for ClientBound {
             ClientBound::SpawnPlayer(
                 origin_p_id, origin_p_name, x, y, z, yaw, pitch) => {
                 let mut spawn_player: Vec<u8> = vec![0x07];
-                spawn_player.push(origin_p_id.try_into().unwrap());
+                spawn_player.push(origin_p_id as u8);
                 for x in 0..origin_p_name.len() {
                     spawn_player.push(origin_p_name[x])
                 }

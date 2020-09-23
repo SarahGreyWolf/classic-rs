@@ -1,5 +1,174 @@
 use byteorder::{LittleEndian};
 
+#[derive(Debug)]
+pub enum Block {
+    Air,
+    Stone,
+    GrassBlock,
+    Dirt,
+    Cobblestone,
+    Planks,
+    Sapling,
+    Bedrock,
+    FlowingWater,
+    StationaryWater,
+    FlowingLava,
+    StationaryLava,
+    Sand,
+    Gravel,
+    GoldOre,
+    IronOre,
+    CoalOre,
+    Wood,
+    Leaves,
+    Sponge,
+    Glass,
+    RedCloth,
+    OrangeCloth,
+    YellowCloth,
+    ChartreuseCloth,
+    GreenCloth,
+    SpringGreenCloth,
+    CyanCloth,
+    CapriCloth,
+    UltramarineCloth,
+    VioletCloth,
+    PurpleCloth,
+    MagentaCloth,
+    RoseCloth,
+    DarkGrayCloth,
+    LightGrayCloth,
+    WhiteCloth,
+    Dandelion,
+    Rose,
+    BrownMushroom,
+    RedMushroom,
+    GoldBlock,
+    IronBlock,
+    DoubleSlab,
+    Slab,
+    Bricks,
+    TNT,
+    Bookshelf,
+    MossyCobblestone,
+    Obsidian
+}
+
+impl From<u8> for Block {
+    fn from(byte: u8) -> Self {
+        match byte {
+            0x00 => Self::Air,
+            0x01 => Self::Stone,
+            0x02 => Self::GrassBlock,
+            0x03 => Self::Dirt,
+            0x04 => Self::Cobblestone,
+            0x05 => Self::Planks,
+            0x06 => Self::Sapling,
+            0x07 => Self::Bedrock,
+            0x08 => Self::FlowingWater,
+            0x09 => Self::StationaryWater,
+            0x0A => Self::FlowingLava,
+            0x0B => Self::StationaryLava,
+            0x0C => Self::Sand,
+            0x0D => Self::Gravel,
+            0x0E => Self::GoldOre,
+            0x0F => Self::IronOre,
+            0x10 => Self::CoalOre,
+            0x11 => Self::Wood,
+            0x12 => Self::Leaves,
+            0x13 => Self::Sponge,
+            0x14 => Self::Glass,
+            0x15 => Self::RedCloth,
+            0x16 => Self::OrangeCloth,
+            0x17 => Self::YellowCloth,
+            0x18 => Self::ChartreuseCloth,
+            0x19 => Self::GreenCloth,
+            0x1A => Self::SpringGreenCloth,
+            0x1B => Self::CyanCloth,
+            0x1C => Self::CapriCloth,
+            0x1D => Self::UltramarineCloth,
+            0x1E => Self::VioletCloth,
+            0x1F => Self::PurpleCloth,
+            0x20 => Self::MagentaCloth,
+            0x21 => Self::RoseCloth,
+            0x22 => Self::DarkGrayCloth,
+            0x23 => Self::LightGrayCloth,
+            0x24 => Self::WhiteCloth,
+            0x25 => Self::Dandelion,
+            0x26 => Self::Rose,
+            0x27 => Self::BrownMushroom,
+            0x28 => Self::RedMushroom,
+            0x29 => Self::GoldBlock,
+            0x2A => Self::IronBlock,
+            0x2B => Self::DoubleSlab,
+            0x2C => Self::Slab,
+            0x2D => Self::Bricks,
+            0x2E => Self::TNT,
+            0x2F => Self::Bookshelf,
+            0x30 => Self::MossyCobblestone,
+            0x31 => Self::Obsidian,
+            _ => Self::Air
+        }
+    }
+}
+
+impl From<Block> for u8 {
+    fn from(block: Block) -> Self {
+        match block {
+            Block::Air => 0x00,
+            Block::Stone => 0x01,
+            Block::GrassBlock => 0x02,
+            Block::Dirt => 0x03,
+            Block::Cobblestone => 0x04,
+            Block::Planks => 0x05,
+            Block::Sapling => 0x06,
+            Block::Bedrock => 0x07,
+            Block::FlowingWater => 0x08,
+            Block::StationaryWater => 0x09,
+            Block::FlowingLava => 0x0A,
+            Block::StationaryLava => 0x0B,
+            Block::Sand => 0x0C,
+            Block::Gravel => 0x0D,
+            Block::GoldOre => 0x0E,
+            Block::IronOre => 0x0F,
+            Block::CoalOre => 0x10,
+            Block::Wood => 0x11,
+            Block::Leaves => 0x12,
+            Block::Sponge => 0x13,
+            Block::Glass => 0x14,
+            Block::RedCloth => 0x15,
+            Block::OrangeCloth => 0x16,
+            Block::YellowCloth => 0x17,
+            Block::ChartreuseCloth => 0x18,
+            Block::GreenCloth => 0x19,
+            Block::SpringGreenCloth => 0x1A,
+            Block::CyanCloth => 0x1B,
+            Block::CapriCloth => 0x1C,
+            Block::UltramarineCloth => 0x1D,
+            Block::VioletCloth => 0x1E,
+            Block::PurpleCloth => 0x1F,
+            Block::MagentaCloth => 0x20,
+            Block::RoseCloth => 0x21,
+            Block::DarkGrayCloth => 0x22,
+            Block::LightGrayCloth => 0x23,
+            Block::WhiteCloth => 0x24,
+            Block::Dandelion => 0x25,
+            Block::Rose => 0x26,
+            Block::BrownMushroom => 0x27,
+            Block::RedMushroom => 0x28,
+            Block::GoldBlock => 0x29,
+            Block::IronBlock => 0x2A,
+            Block::DoubleSlab => 0x2B,
+            Block::Slab => 0x2C,
+            Block::Bricks => 0x2D,
+            Block::TNT => 0x2E,
+            Block::Bookshelf => 0x2F,
+            Block::MossyCobblestone => 0x30,
+            Block::Obsidian => 0x31
+        }
+    }
+}
+
 pub trait Metadata {
 
 }
@@ -80,10 +249,11 @@ impl ClassicWorld {
     //! Create a new empty world with a name aswell as dimensions
     pub fn new(name: &str, x: i16, y: i16, z: i16) -> Self {
 
-        let mut block_array: Vec<u8> = (0..(x*y*z)).map(|k| 0x00).collect();
+        let mut block_array: Vec<u8> = (0..(x*y*z)).map(|k| Block::Air.into()).collect();
         for i in 0..x*z {
-            block_array[i as usize] = 0x01;
+            block_array[i as usize] = Block::TNT.into();
         }
+        block_array[(x as usize/2)*2*(z as usize/2)] = Block::Obsidian.into();
         Self {
             format_version: 1,
             name: name.to_string(),
@@ -113,6 +283,13 @@ impl ClassicWorld {
 
     pub fn get_blocks(&self) -> &Vec<u8> {
         &self.block_array
+    }
+
+    pub fn set_block(&mut self, x: i16, y: i16, z: i16, block: Block) {
+        self.block_array[(x*y*z) as usize] = block.into();
+    }
+    pub fn get_block(&mut self, x: i16, y: i16, z: i16) -> Block {
+        self.block_array[(x*y*z) as usize].into()
     }
 }
 

@@ -26,7 +26,7 @@ impl<'a> System<'a> for NetworkReadSys {
 
             let incoming_packet = Packet::from(buffer.as_ref());
             match incoming_packet {
-                ServerBound::PlayerIdentification(protocol, username,
+                ServerBound::PlayerIdentification(_protocol, username,
                                                   ver_key, _) => {
                     player.username = username;
                     player.ver_key = ver_key;
