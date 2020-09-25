@@ -1,6 +1,4 @@
-use tokio::net::{TcpListener, TcpStream};
-use std::net::SocketAddr;
-use tokio::stream::StreamExt;
+use tokio::net::{TcpListener};
 use tokio::time::{Instant, Duration};
 use flume::{Receiver, Sender};
 use fern::colors::{Color, ColoredLevelConfig};
@@ -8,8 +6,8 @@ use log::{info, debug, error, warn, Level};
 use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
 use specs::{World, WorldExt, DispatcherBuilder, Builder};
-use backtrace::Backtrace;
 use std::sync::{Arc, Mutex};
+use std::path::PathBuf;
 
 use std::fs::File;
 use std::io::{BufReader, Read};
@@ -33,8 +31,10 @@ struct Server {
     mo_heartbeat: mineonline_api::heartbeat::Heartbeat,
     m_heartbeat: mojang_api::heartbeat::Heartbeat,
     client_rx: Receiver<Client>,
+    network_rx: Receiver<(u8, Vec<ClientBound>)>,
+    network_tx: Sender<(u8, Vec<ClientBound>)>,
     world: Arc<Mutex<ClassicWorld>>,
-    ecs_world: World,
+    // ecs_world: World,
     config: Config,
     clients: Vec<Client>,
 }
@@ -81,27 +81,29 @@ impl Server {
         let local_ip = config.server.local_ip.clone();
         let port = config.server.port.clone();
         let tx_clone = tx.clone();
-        core::mem::forget(tx);
+        let (n_tx, n_rx) = flume::unbounded::<(u8, Vec<ClientBound>)>();
+        let n_tx_clone = n_tx.clone();
         tokio::spawn(async move {
-            let listener = TcpListener::bind(format!("{}:{:#}", local_ip, port)).
+            let listener = TcpListener::bind(format!("{}:{:#}", local_ip, port, )).
                 await.expect("Failed to bind");
-            Server::listen(listener, tx_clone).await.expect("Failed to listen");
+            Server::listen(listener, tx_clone, n_tx_clone).await.expect("Failed to listen");
         });
-        let mut ecs_world = ecs::initialise_world();
+        // let mut ecs_world = ecs::initialise_world();
         // let mut dispatcher = DispatcherBuilder::new()
         //     .with(ecs::systems::NetworkReadSys, "net_sys", &[]).build();
         // dispatcher.setup(&mut world);
         // dispatcher.dispatch(&mut world);
         // world.maintain();
-
         Self {
             protocol: 7,
             salt,
             mo_heartbeat,
             m_heartbeat,
             client_rx: rx,
-            world: Arc::new(Mutex::new(ClassicWorld::new(&"SarahWorld",10, 20, 10))),
-            ecs_world,
+            network_rx: n_rx,
+            network_tx: n_tx,
+            world: Arc::new(Mutex::new(ClassicWorld::new(&"SarahWorld", 10, 10, 10))),
+            // ecs_world,
             config: Config::get(),
             clients: Vec::new(),
         }
@@ -138,6 +140,7 @@ impl Server {
     }
 
     async fn update_network(&mut self) {
+        let mut packet_buffer: (u8, Vec<ClientBound>) = (0, Vec::new());
         loop {
             match self.client_rx.try_recv() {
                 Ok(client) => self.clients.push(client),
@@ -147,21 +150,34 @@ impl Server {
                 }
             }
         }
+        loop {
+            match self.network_rx.try_recv() {
+                Ok(packets) => packet_buffer = packets,
+                Err(flume::TryRecvError::Empty) => break,
+                Err(flume::TryRecvError::Disconnected) => {
+                    break;
+                }
+            }
+        }
+
         for c_pos in 0..self.clients.len() {
             let mut closed = false;
             match self.clients[c_pos].handle_connect(self.world.clone()).await {
                 Ok(_) => {},
                 Err(e) => {
                     if e.kind() == tokio::io::ErrorKind::ConnectionReset {
-                        info!("Player {} has disconnected", self.clients[c_pos].username);
+                        info!("{} has left the server", self.clients[c_pos].username);
                         closed = true;
                     } else if e.kind() == tokio::io::ErrorKind::ConnectionAborted {
-                        info!("Player {} has disconnected", self.clients[c_pos].username);
+                        info!("{} has left the server", self.clients[c_pos].username);
                         closed = true;
-                    }else {
+                    } else {
                         panic!("{}", e);
                     }
                 }
+            }
+            if packet_buffer.0 != self.clients[c_pos].get_id() {
+                self.clients[c_pos].write_packets(&packet_buffer.1).await;
             }
             if closed {
                 self.clients.remove(c_pos);
@@ -169,11 +185,11 @@ impl Server {
         }
     }
 
-    async fn listen(mut listener: TcpListener, tx: Sender<Client>)
+    async fn listen(mut listener: TcpListener, tx: Sender<Client>, n_tx: Sender<(u8, Vec<ClientBound>)>)
         -> Result<(), tokio::io::Error> {
-        let mut id: i8 = 0;
+        let mut id: u8 = 0;
         while let Ok((stream, addr)) = listener.accept().await {
-            let client = Client::new(id, stream).await;
+            let client = Client::new(id, stream, n_tx.clone()).await;
             if tx.send(client).is_err() {
                 panic!("Failed to send client");
             }
@@ -198,18 +214,23 @@ async fn init_logging() -> Result<(), tokio::io::Error> {
     let colors = ColoredLevelConfig::new()
         .info(Color::Magenta)
         .error(Color::BrightRed);
+    let datetime = chrono::Local::now().format("%Y-%m-%d_%H-%M");
+    let log_file_path: PathBuf = PathBuf::from(&format!("./logs/{}.log", datetime));
     if tokio::fs::read_dir("./logs").await.is_err() {
         tokio::fs::create_dir("./logs").await.expect("Failed to create logs folder");
+        tokio::fs::File::open(&log_file_path).await.unwrap_or(
+            tokio::fs::File::create(&log_file_path).await.expect("Failed to create log file")
+        );
     }
     fern::Dispatch::new()
         .chain(std::io::stdout())
         .format(move |out, message, record| {
             out.finish(format_args!(
-                "[{}][{}]{} {}",
+                "[{}]{}[{}] {}",
                 // This will color the log level only, not the whole line. Just a touch.
                 colors.color(record.level()),
+                chrono::Local::now().format("[%Y-%m-%d %H:%M:%S]"),
                 record.module_path().unwrap(),
-                chrono::Utc::now().format("[%Y-%m-%d %H:%M:%S]"),
                 message
             ))
         })
@@ -218,7 +239,7 @@ async fn init_logging() -> Result<(), tokio::io::Error> {
         .level_for("mio", log::LevelFilter::Info)
         .level_for("reqwest", log::LevelFilter::Info)
         .level_for("tokio", log::LevelFilter::Info)
-        .chain(fern::log_file("./logs/latest.log")?)
+        .chain(fern::log_file(log_file_path)?)
         .apply()
         .unwrap();
     std::panic::set_hook(Box::new(|panic_info| {

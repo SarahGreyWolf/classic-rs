@@ -19,13 +19,13 @@ pub enum ClientBound {
     LevelDataChunk(Short, ByteArray, u8),
     LevelFinalize(Short, Short, Short),
     SetBlock(Short, Short, Short, u8),
-    SpawnPlayer(i8, MString, Short, Short, Short, u8, u8),
-    PlayerTeleport(i8, Short, Short, Short, u8, u8),
-    PositionAndOrientationUpdate(i8, i8, i8, i8, u8, u8),
-    PositionUpdate(i8, i8, i8, i8),
-    OrientationUpdate(i8, u8, u8),
-    DespawnPlayer(i8),
-    Message(i8, MString),
+    SpawnPlayer(u8, MString, Short, Short, Short, u8, u8),
+    PlayerTeleport(u8, Short, Short, Short, u8, u8),
+    PositionAndOrientationUpdate(u8, i8, i8, i8, u8, u8),
+    PositionUpdate(u8, i8, i8, i8),
+    OrientationUpdate(u8, u8, u8),
+    DespawnPlayer(u8),
+    Message(u8, MString),
     DisconnectPlayer(MString),
     UpdateUserType(u8),
 }
@@ -222,7 +222,7 @@ impl Packet<&[u8]> for ServerBound {
                 let msg = buffer[cursor.position() as usize..].to_vec().into_iter()
                     .take_while(|&x| x != (0 as u8)).collect::<Vec<_>>();
                 let msg = String::from_utf8(msg)
-                    .expect("Invalid utf8 Message").replace("\u{20}", "");
+                    .expect("Invalid utf8 Message");
                 ServerBound::Message(unused, msg)
             }
             _ => {

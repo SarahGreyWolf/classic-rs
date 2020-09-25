@@ -250,10 +250,9 @@ impl ClassicWorld {
     pub fn new(name: &str, x: i16, y: i16, z: i16) -> Self {
 
         let mut block_array: Vec<u8> = (0..(x*y*z)).map(|k| Block::Air.into()).collect();
-        for i in 0..x*z {
-            block_array[i as usize] = Block::TNT.into();
+        for i in 0..x*z*6 {
+            block_array[i as usize] = Block::GrassBlock.into();
         }
-        block_array[(x as usize/2)*2*(z as usize/2)] = Block::Obsidian.into();
         Self {
             format_version: 1,
             name: name.to_string(),
@@ -267,9 +266,9 @@ impl ClassicWorld {
             last_accessed: 0,
             last_modified: 0,
             spawn: Spawn {
-                x: 0,
-                y: 0,
-                z: 0,
+                x: x/2,
+                y,
+                z: z/2,
                 h: 0,
                 p: 0
             },

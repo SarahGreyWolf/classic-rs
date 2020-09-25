@@ -14,34 +14,41 @@ use mc_packets::classic::{ClientBound, ServerBound};
 use mc_worlds::classic::{ClassicWorld, Block};
 
 use crate::config::Config;
+use std::convert::TryFrom;
 
 const STRING_LENGTH: usize = 64;
 
 pub struct Client {
     pub(crate) username: String,
-    id: i8,
+    id: u8,
     // The rank of the user, 0x64 for op, 0x00 for normal
     user_type: u8,
     socket: TcpStream,
+    n_tx: Sender<(u8, Vec<ClientBound>)>,
     current_x: i16,
     current_y: i16,
-    current_z: i16
+    current_z: i16,
+    current_yaw: u8,
+    current_pitch: u8,
 }
 
 impl Client {
-    pub async fn new(id: i8, sock: TcpStream) -> Self {
+    pub async fn new(id: u8, sock: TcpStream, n_tx: Sender<(u8, Vec<ClientBound>)>) -> Self {
         Self {
             username: "".to_string(),
             id,
             user_type: 0x00,
             socket: sock,
+            n_tx,
             current_x: 0,
             current_y: 0,
-            current_z: 0
+            current_z: 0,
+            current_yaw: 0,
+            current_pitch: 0,
         }
     }
 
-    pub fn get_id(&self) -> i8 {
+    pub fn get_id(&self) -> u8 {
         self.id
     }
 
@@ -53,6 +60,7 @@ impl Client {
 
         let mut serverbound_packets: Vec<ServerBound> = Vec::new();
         let mut clientbound_packets: Vec<ClientBound> = Vec::new();
+        let mut echo_packets: Vec<ClientBound> = Vec::new();
 
         match receive_buffer[0] {
             0x08 => {
@@ -70,8 +78,7 @@ impl Client {
                                                   ver_key, _) => {
                     if protocol != 0 {
                         self.username = username;
-                        debug!("{}", self.username);
-                        debug!("{}", ver_key);
+                        // debug!("{}", ver_key);
                         let config = Config::get();
                         let mut name: [u8; STRING_LENGTH] = [0x20; STRING_LENGTH];
                         for i in 0..config.server.name.len() {
@@ -81,7 +88,7 @@ impl Client {
                         for i in 0..config.server.motd.len() {
                             motd[i] = config.server.motd.as_bytes()[i];
                         }
-                        self.write_packets(vec![ClientBound::ServerIdentification(
+                        self.write_packets(&vec![ClientBound::ServerIdentification(
                             7,
                             name,
                             motd,
@@ -89,43 +96,148 @@ impl Client {
                         ), ClientBound::LevelInitialize]).await;
                         self.send_blocks(world_lock.deref()).await.expect("Failed to send blocks");
                         let size = world_lock.get_size();
-                        self.write_packets(vec![ClientBound::LevelFinalize(size[0], size[1], size[2]),
-                                                ClientBound::SpawnPlayer(
-                                                    -1,
-                                                    self.get_username_as_bytes(),
-                                                    world_lock.get_size()[0]/2,
-                                                    world_lock.get_size()[1],
-                                                    world_lock.get_size()[2]/2,
-                                                    0,
-                                                    0
-                                                )]).await;
+                        self.write_packets(&vec![
+                            ClientBound::LevelFinalize(size[0], size[1], size[2]),
+                            ClientBound::SpawnPlayer(
+                                255,
+                                self.get_username_as_bytes(),
+                                5 * 32,
+                                7 * 32,
+                                5 * 32,
+                                0,
+                                0,
+                            ),
+                            ClientBound::PlayerTeleport(
+                                255,
+                                5 * 32,
+                                7 * 32,
+                                5 * 32,
+                                0,
+                                0,
+                            )
+                        ]).await;
+                        info!("{} Joined the Server", self.username);
+                        clientbound_packets.push(ClientBound::SpawnPlayer(
+                            self.id,
+                            self.get_username_as_bytes(),
+                            5 * 32,
+                            7 * 32,
+                            5 * 32,
+                            0,
+                            0,
+                        ));
                     }
                 }
                 ServerBound::SetBlock(x, y, z, mode, block) => {
                     let block = Block::from(block).clone();
                     if mode == 0x00 {
                         world_lock.set_block(x, y, z, Block::Air.into());
-                        self.write_packets(vec![
+                        echo_packets.push(
                             ClientBound::SetBlock(x, y, z, Block::Air.into())
-                        ]).await;
+                        );
+                        clientbound_packets.push(
+                            ClientBound::SetBlock(x, y, z, Block::Air.into())
+                        );
                     } else {
                         world_lock.set_block(x, y, z, block.into());
-                        self.write_packets(vec![
+                        echo_packets.push(
                             ClientBound::SetBlock(x, y, z, block.into())
-                        ]).await;
+                        );
+                        clientbound_packets.push(
+                            ClientBound::SetBlock(x, y, z, block.into())
+                        );
                     }
                 }
                 ServerBound::PositionAndOrientation(
                     p_id, x, y, z, yaw, pitch) => {
-                    // self.tx.send(
-                    //     Packet::into(ServerBound::PositionAndOrientation(
-                    //         self.id,
-                    //         x, y, z, yaw, pitch
-                    //     ))
-                    // ).expect("Failed to send PositionAndOrientation");
+                    let mut pos_changed: bool = false;
+                    let mut ori_changed: bool = false;
+                    if x != self.current_x || y != self.current_y || z != self.current_z {
+                        pos_changed = true;
+                    }
+                    if yaw != self.current_yaw || pitch != self.current_pitch {
+                        ori_changed = true;
+                    }
+                    if pos_changed && ori_changed {
+                        echo_packets.push(
+                            ClientBound::PositionAndOrientationUpdate(
+                                p_id,
+                                (self.current_x - x) as i8,
+                                (self.current_y - y) as i8,
+                                (self.current_z - z) as i8,
+                                yaw,
+                                pitch
+                            )
+                        );
+                        clientbound_packets.push(
+                            ClientBound::PositionAndOrientationUpdate(
+                                p_id,
+                                (self.current_x - x) as i8,
+                                (self.current_y - y) as i8,
+                                (self.current_z - z) as i8,
+                                yaw,
+                                pitch
+                            )
+                        );
+                    } else if pos_changed {
+                        echo_packets.push(
+                            ClientBound::PositionUpdate(
+                                p_id,
+                                (self.current_x - x) as i8,
+                                (self.current_y - y) as i8,
+                                (self.current_z - z) as i8,
+                            )
+                        );
+                        clientbound_packets.push(
+                            ClientBound::PositionUpdate(
+                                p_id,
+                                (self.current_x - x) as i8,
+                                (self.current_y - y) as i8,
+                                (self.current_z - z) as i8,
+                            )
+                        );
+                    } else {
+                        echo_packets.push(
+                            ClientBound::OrientationUpdate(
+                                p_id,
+                                yaw,
+                                pitch
+                            )
+                        );
+                        clientbound_packets.push(
+                            ClientBound::OrientationUpdate(
+                                p_id,
+                                yaw,
+                                pitch
+                            )
+                        );
+                    }
+
+                    self.current_x = x;
+                    self.current_y = y;
+                    self.current_z = z;
+                    self.current_yaw = yaw;
+                    self.current_pitch = pitch;
                 }
                 ServerBound::Message(_, message) => {
-                    info!("{}: {}", self.username, message);
+                    let mut f_msg: String = "".to_owned();
+                    let split: Vec<&str> = message.split_ascii_whitespace().collect();
+                    for i in 0..split.len() {
+                        if i != 0 {
+                            f_msg.push_str(&format!(" {}", split[i]));
+                        }else{
+                            f_msg.push_str(&format!("{}", split[i]));
+                        }
+                    }
+
+                    let msg = format!("<{}>: {}", self.username, f_msg);
+                    info!("{}", msg);
+                    let mut message: [u8; 64] = [0x20; 64];
+                    for i in 0..msg.len() {
+                        message[i] = msg.as_bytes()[i];
+                    }
+                    echo_packets.push(ClientBound::Message(self.id, message));
+                    clientbound_packets.push(ClientBound::Message(self.id, message));
                 }
                 ServerBound::UnknownPacket => {
                     let msg = String::from_utf8(receive_buffer.to_vec())
@@ -134,9 +246,12 @@ impl Client {
                 }
             }
         }
-        self.write_packets(vec![ClientBound::Ping]).await;
-        // let received = self.rx.try_recv().unwrap_or(vec![]);
-        // debug!("{:x?}", received);
+        echo_packets.push(ClientBound::Ping);
+
+        self.write_packets(&vec![ClientBound::Ping]).await;
+
+        self.write_packets(&echo_packets).await;
+        self.n_tx.send((self.id, clientbound_packets)).expect("Failed to send Packets");
         Ok(())
     }
 
@@ -160,21 +275,21 @@ impl Client {
                                                                ((sent / compressed.len()) * 100) as u8);
                 sent += 1024;
                 left -= 1024;
-                self.write_packets(vec![world_packet]).await;
+                self.write_packets(&vec![world_packet]).await;
             }else {
                 // let world_packet = ClientBound::LevelDataChunk(left as i16, send_buffer, progress);
                 sent += left;
                 left = 0;
                 let world_packet = ClientBound::LevelDataChunk(1024, send_buffer,
                                                                ((sent / compressed.len()) * 100) as u8);
-                self.write_packets(vec![world_packet]).await;
+                self.write_packets(&vec![world_packet]).await;
             }
         }
 
         Ok(())
     }
 
-    async fn write_packets(&mut self, packets: Vec<ClientBound>) {
+    pub async fn write_packets(&mut self, packets: &Vec<ClientBound>) {
         let mut packet_buffer: [u8; 1460] = [0u8; 1460];
         let mut buffer_filled: usize = 0;
 
@@ -186,7 +301,7 @@ impl Client {
                     Ok(_) => {}
                     Err(e) => {
                         if e.kind() == ErrorKind::ConnectionAborted {
-                            info!("Player {} Lost Connection", self.username);
+                            // debug!("Fucked Before");
                         } else {
                             panic!("Error: {:?}", e);
                         }
@@ -209,12 +324,13 @@ impl Client {
             Ok(_) => {}
             Err(e) => {
                 if e.kind() == ErrorKind::ConnectionAborted {
-                    info!("Player {} Lost Connection", self.username);
+                    // debug!("Fucked Before");
                 } else {
                     panic!("Error: {:?}", e);
                 }
             }
         }
+        // debug!("{:x?}, {:x?}", packets, packet_buffer);
     }
 
     fn get_username_as_bytes(&self) -> [u8; 64] {
