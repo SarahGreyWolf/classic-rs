@@ -6,6 +6,12 @@ use json::number::Number;
 use json::object::Object;
 use reqwest::{Body, Url, StatusCode};
 use log::{debug};
+use serde::{Serialize, Deserialize};
+
+#[derive(Deserialize, Debug)]
+struct Response {
+    uuid: String
+}
 
 /// Heartbeat Object
 pub struct Heartbeat {
@@ -144,13 +150,16 @@ impl Heartbeat {
     pub async fn beat(&mut self) {
         let request_client = reqwest::Client::new();
         let request = request_client.post(Url::parse(&self.url)
-            .expect("Failed ot parse to URL")
+            .expect("Failed to parse to URL").join("/mineonline/listserver.jsp").unwrap()
         ).header("content-type", "application/json").body(self.request.clone());
-        // println!("Request: {:?}", request);
         let response = request.send().await.expect("Failed to make post request");
-        // println!("Response: {:?}", response);
         if response.status() != StatusCode::OK {
             panic!("Heartbeat Request Failed: {}", response.status());
+        } else {
+            if self.uuid == "" {
+                let json_response = response.json::<Response>().await.expect("Failed to parse json");
+                self.uuid = json_response.uuid;
+            }
         }
     }
 }
