@@ -102,9 +102,15 @@ impl Server {
         // world.maintain();
         let running = Arc::new(AtomicBool::new(true));
         let r = running.clone();
+        #[cfg(feature = "mineonline_api")]
+        let uuid = mo_heartbeat.get_uuid().to_string().clone();
+        let url = mo_heartbeat.get_url().to_string().clone();
 
         tokio::spawn(async move {
             ctrl_c().await.expect("Failed to listen for event");
+            #[cfg(feature = "mineonline_api")]
+            mineonline_api::heartbeat::Heartbeat::delete(&url, &uuid).await
+                .expect("Failed to send delete request");
 
             r.store(false, Ordering::SeqCst);
         });
