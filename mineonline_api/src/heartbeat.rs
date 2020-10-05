@@ -9,6 +9,7 @@ use log::{debug};
 
 /// Heartbeat Object
 pub struct Heartbeat {
+    uuid: String,
     url: String,
     ip: String,
     port: u16,
@@ -18,6 +19,7 @@ pub struct Heartbeat {
     online: String,
     client_hash: String,
     users: u16,
+    players_list: Vec<String>,
     whitelisted: bool,
     whitelisted_users: Vec<String>,
     whitelisted_ips: Vec<String>,
@@ -34,6 +36,7 @@ impl Heartbeat {
     pub fn new(url: &str, ip: &str, port: u16, name: &str, public: bool, max_players: u16, online: bool,
                client_hash: &str, whitelisted: bool) -> Self {
         Self {
+            uuid: "".to_string(),
             url: url.to_string(),
             ip: ip.to_string(),
             port,
@@ -43,6 +46,7 @@ impl Heartbeat {
             online: online.to_string(),
             client_hash: client_hash.to_string(),
             users: 0,
+            players_list: vec![],
             whitelisted,
             whitelisted_users: vec![],
             whitelisted_ips: vec![],
@@ -56,6 +60,11 @@ impl Heartbeat {
     /// Update the number of users currently connected to the server in the heartbeat.
     pub fn update_users(&mut self, user_count: u16) {
         self.users = user_count;
+    }
+
+    /// Update the usernames of users currently connected to the server in the heartbeat.
+    pub fn update_players(&mut self, user_names: &Vec<String>) {
+        self.players_list = user_names.to_vec();
     }
 
     /// Update the servers ban list in the heartbeat.
@@ -79,6 +88,10 @@ impl Heartbeat {
                                JsonValue::String(String::from(&self.port.to_string())));
         mineonline_json.insert("users",
                                JsonValue::Number(Number::from(self.users)));
+        let players: Vec<JsonValue> = self.players_list.iter().map(
+            |p| JsonValue::String(String::from(p))).collect();
+        mineonline_json.insert("players",
+                               JsonValue::Array(players));
         mineonline_json.insert("max",
                                JsonValue::Number(Number::from(self.max_users)));
         mineonline_json.insert("name",

@@ -7,6 +7,7 @@ use std::ops::Deref;
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use std::io::Write;
+use std::cell::{RefMut};
 
 
 use mc_packets::Packet;
@@ -14,7 +15,7 @@ use mc_packets::classic::{ClientBound, ServerBound};
 use mc_worlds::classic::{ClassicWorld, Block};
 
 use crate::config::Config;
-use std::convert::TryFrom;
+use std::borrow::BorrowMut;
 
 const STRING_LENGTH: usize = 64;
 
@@ -50,6 +51,18 @@ impl Client {
 
     pub fn get_id(&self) -> u8 {
         self.id
+    }
+
+    pub async fn spawn_self(&self) -> ClientBound {
+        ClientBound::SpawnPlayer(
+            self.id,
+            self.get_username_as_bytes(),
+            self.current_x,
+            self.current_y,
+            self.current_y,
+            self.current_yaw,
+            self.current_pitch
+        )
     }
 
     pub async fn handle_connect(&mut self, world: Arc<Mutex<ClassicWorld>>) -> Result<(), tokio::io::Error> {
@@ -116,7 +129,16 @@ impl Client {
                                 0,
                             )
                         ]).await;
-                        info!("{} Joined the Server", self.username);
+                        info!("{} joined the Server", self.username);
+                        clientbound_packets.push(ClientBound::Message(255, {
+                                let msg = format!("{} joined the Server", self.username);
+                                let mut message: [u8; 64] = [0x20; 64];
+                                for i in 0..msg.len() {
+                                    message[i] = msg.as_bytes()[i];
+                                }
+                                message
+                            }
+                        ));
                         clientbound_packets.push(ClientBound::SpawnPlayer(
                             self.id,
                             self.get_username_as_bytes(),
@@ -161,7 +183,7 @@ impl Client {
                     if pos_changed && ori_changed {
                         echo_packets.push(
                             ClientBound::PositionAndOrientationUpdate(
-                                p_id,
+                                255,
                                 (self.current_x - x) as i8,
                                 (self.current_y - y) as i8,
                                 (self.current_z - z) as i8,
@@ -182,7 +204,7 @@ impl Client {
                     } else if pos_changed {
                         echo_packets.push(
                             ClientBound::PositionUpdate(
-                                p_id,
+                                255,
                                 (self.current_x - x) as i8,
                                 (self.current_y - y) as i8,
                                 (self.current_z - z) as i8,
@@ -199,7 +221,7 @@ impl Client {
                     } else {
                         echo_packets.push(
                             ClientBound::OrientationUpdate(
-                                p_id,
+                                255,
                                 yaw,
                                 pitch
                             )

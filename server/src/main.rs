@@ -9,9 +9,6 @@ use specs::{World, WorldExt, DispatcherBuilder, Builder};
 use std::sync::{Arc, Mutex};
 use std::path::PathBuf;
 
-use std::fs::File;
-use std::io::{BufReader, Read};
-
 use mc_packets::Packet;
 use mc_packets::classic::{ClientBound, ServerBound};
 use mc_worlds::classic::ClassicWorld;
@@ -24,12 +21,14 @@ mod ecs;
 use client::Client;
 use config::Config;
 use ecs::components::{common, player, entity};
+use tokio::signal::windows::ctrl_break;
 
 struct Server {
     protocol: u8,
     salt: String,
     mo_heartbeat: mineonline_api::heartbeat::Heartbeat,
     m_heartbeat: mojang_api::heartbeat::Heartbeat,
+    beatdate: bool,
     client_rx: Receiver<Client>,
     network_rx: Receiver<(u8, Vec<ClientBound>)>,
     network_tx: Sender<(u8, Vec<ClientBound>)>,
@@ -37,6 +36,7 @@ struct Server {
     // ecs_world: World,
     config: Config,
     clients: Vec<Client>,
+    usernames: Vec<String>,
 }
 
 impl Server {
@@ -99,6 +99,7 @@ impl Server {
             salt,
             mo_heartbeat,
             m_heartbeat,
+            beatdate: false,
             client_rx: rx,
             network_rx: n_rx,
             network_tx: n_tx,
@@ -106,6 +107,7 @@ impl Server {
             // ecs_world,
             config: Config::get(),
             clients: Vec::new(),
+            usernames: Vec::new(),
         }
     }
 
@@ -119,16 +121,21 @@ impl Server {
 
             self.update_network().await;
             self.update_game().await;
-            if (duration.as_secs() % 40) == 0 {
+            if (duration.as_secs() % 40) == 0 || self.beatdate {
                 if self.config.heartbeat.mineonline.active {
+                    self.mo_heartbeat.update_players(&self.usernames);
+                    self.mo_heartbeat.update_users(self.clients.len() as u16);
                     self.mo_heartbeat.build_request();
                     self.mo_heartbeat.beat().await;
                 }
                 if self.config.heartbeat.mojang.active {
+                    self.m_heartbeat.update_users(self.clients.len() as u16);
                     self.m_heartbeat.build_request();
                     self.m_heartbeat.beat().await;
                 }
+                self.beatdate = false;
             }
+
             end = Instant::now();
         }
 
@@ -143,7 +150,10 @@ impl Server {
         let mut packet_buffer: (u8, Vec<ClientBound>) = (0, Vec::new());
         loop {
             match self.client_rx.try_recv() {
-                Ok(client) => self.clients.push(client),
+                Ok(client) => {
+                    self.clients.push(client);
+                    self.beatdate = true;
+                },
                 Err(flume::TryRecvError::Empty) => break,
                 Err(flume::TryRecvError::Disconnected) => {
                     break;
@@ -160,27 +170,40 @@ impl Server {
             }
         }
 
-        for c_pos in 0..self.clients.len() {
+        let mut clients = &mut self.clients;
+
+        for c_pos in 0..clients.len() {
+            let client = &mut clients[c_pos];
+            if client.username != "" && !self.usernames.contains(&client.username) {
+                self.usernames.push(client.username.clone());
+                self.beatdate = true;
+            }
             let mut closed = false;
-            match self.clients[c_pos].handle_connect(self.world.clone()).await {
+            match client.handle_connect(self.world.clone()).await {
                 Ok(_) => {},
                 Err(e) => {
                     if e.kind() == tokio::io::ErrorKind::ConnectionReset {
-                        info!("{} has left the server", self.clients[c_pos].username);
+                        info!("{} has left the server", client.username);
                         closed = true;
                     } else if e.kind() == tokio::io::ErrorKind::ConnectionAborted {
-                        info!("{} has left the server", self.clients[c_pos].username);
+                        info!("{} has left the server", client.username);
                         closed = true;
                     } else {
                         panic!("{}", e);
                     }
                 }
             }
-            if packet_buffer.0 != self.clients[c_pos].get_id() {
-                self.clients[c_pos].write_packets(&packet_buffer.1).await;
+            if packet_buffer.0 != client.get_id() {
+                client.write_packets(&packet_buffer.1).await;
             }
             if closed {
-                self.clients.remove(c_pos);
+                for i in 0..self.usernames.len() {
+                    if self.usernames[i] == client.username {
+                        self.usernames.remove(i);
+                    }
+                }
+                clients.remove(c_pos);
+                self.beatdate = true;
             }
         }
     }
