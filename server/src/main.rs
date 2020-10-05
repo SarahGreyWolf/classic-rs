@@ -100,6 +100,7 @@ impl Server {
         // dispatcher.setup(&mut world);
         // dispatcher.dispatch(&mut world);
         // world.maintain();
+
         let running = Arc::new(AtomicBool::new(true));
         let r = running.clone();
         #[cfg(feature = "mineonline_api")]
@@ -159,6 +160,13 @@ impl Server {
             }
 
             end = Instant::now();
+        }
+
+        info!("Disconnecting all Clients");
+        for i in 0..self.clients.len() {
+            info!("Disconnecting {}", self.clients[i].username);
+            self.clients[i].disconnect(&"Server shutting down")
+                .await.expect("Failed to disconnect user");
         }
 
         Ok(())

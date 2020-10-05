@@ -277,6 +277,18 @@ impl Client {
         Ok(())
     }
 
+    pub async fn disconnect(&mut self, msg: &str) -> Result<(), tokio::io::Error> {
+        self.write_packets(&vec![ClientBound::DisconnectPlayer({
+            let mut message_bytes: [u8; 64] = [0x20; 64];
+            for i in 0..msg.len() {
+                message_bytes[i] = msg.as_bytes()[i];
+            }
+            message_bytes
+        })]).await;
+
+        Ok(())
+    }
+
     async fn send_blocks(&mut self, world: &ClassicWorld) -> Result<(), tokio::io::Error> {
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
         encoder.write(&(world.get_blocks().len() as u32).to_be_bytes()).unwrap();
