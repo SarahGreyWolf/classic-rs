@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["Master0r0 <m.sarahgreywolf@outlook.com>"]
 edition = "2018"
 
+[features]
+default = ["mineonline_api", "mojang_api"]
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -20,8 +23,8 @@ tokio = {version="0.2.21", features=["full"]}
 backtrace = "0.3.50"
 flate2 = {version="1.0.17", features=["tokio"]}
 
-mineonline_api = {path = "../mineonline_api"}
-mojang_api = {path = "../mojang_api"}
+mineonline_api = {path = "../mineonline_api", optional=true}
+mojang_api = {path = "../mojang_api", optional=true}
 mc_packets = {path = "../mc_packets"}
 mc_worlds = {path = "../mc_worlds"}
 grey_mc_api = {path = "../grey_mc_api"}

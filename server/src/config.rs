@@ -17,7 +17,7 @@ impl Default for MineOnline {
     fn default() -> Self {
         Self {
             active: true,
-            url: "http://mineonline.codie.gg/mineonline/listserver.jsp".to_string()
+            url: "http://mineonline.codie.gg".to_string()
         }
     }
 }

@@ -1,5 +1,6 @@
 use tokio::net::{TcpListener};
 use tokio::time::{Instant, Duration};
+use tokio::signal::ctrl_c;
 use flume::{Receiver, Sender};
 use fern::colors::{Color, ColoredLevelConfig};
 use log::{info, debug, error, warn, Level};
@@ -21,13 +22,14 @@ mod ecs;
 use client::Client;
 use config::Config;
 use ecs::components::{common, player, entity};
-use tokio::signal::windows::ctrl_break;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 struct Server {
     protocol: u8,
     salt: String,
     mo_heartbeat: mineonline_api::heartbeat::Heartbeat,
     m_heartbeat: mojang_api::heartbeat::Heartbeat,
+    running: Arc<AtomicBool>,
     beatdate: bool,
     client_rx: Receiver<Client>,
     network_rx: Receiver<(u8, Vec<ClientBound>)>,
@@ -43,7 +45,7 @@ impl Server {
     pub async fn new() -> Self {
         let config = Config::get();
         let salt: String = thread_rng().sample_iter(&Alphanumeric).take(16).collect();
-
+        #[cfg(feature = "mineonline_api")]
         let mut mo_heartbeat = mineonline_api::heartbeat::Heartbeat::new(
             &config.heartbeat.mineonline.url,
             &config.server.ip,
@@ -53,10 +55,11 @@ impl Server {
             config.server.max_players,
             config.server.online_mode,
             "90632803F45C15164587256A08C0ECB4",
-            config.server.whitelisted
+            config.server.whitelisted,
         );
         mo_heartbeat.build_request();
 
+        #[cfg(feature = "mojang_api")]
         let mut m_heartbeat = mojang_api::heartbeat::Heartbeat::new(
             &config.heartbeat.mojang.url,
             &config.server.ip,
@@ -67,12 +70,15 @@ impl Server {
             config.server.online_mode,
             &salt,
             7,
-            config.server.whitelisted
+            config.server.whitelisted,
         );
         m_heartbeat.build_request();
+
+        #[cfg(feature = "mineonline_api")]
         if config.heartbeat.mineonline.active {
             mo_heartbeat.beat().await;
         }
+        #[cfg(feature = "mojang_api")]
         if config.heartbeat.mojang.active {
             m_heartbeat.beat().await;
         }
@@ -94,12 +100,22 @@ impl Server {
         // dispatcher.setup(&mut world);
         // dispatcher.dispatch(&mut world);
         // world.maintain();
+        let running = Arc::new(AtomicBool::new(true));
+        let r = running.clone();
+
+        tokio::spawn(async move {
+            ctrl_c().await.expect("Failed to listen for event");
+
+            r.store(false, Ordering::SeqCst);
+        });
+
         Self {
             protocol: 7,
             salt,
             mo_heartbeat,
             m_heartbeat,
             beatdate: false,
+            running,
             client_rx: rx,
             network_rx: n_rx,
             network_tx: n_tx,
@@ -116,7 +132,7 @@ impl Server {
         info!("Server Running at {}:{:#}", self.config.server.ip, self.config.server.port);
         let start = Instant::now();
         let mut end = Instant::now();
-        loop {
+        while self.running.load(Ordering::SeqCst) {
             let duration = end.duration_since(start);
 
             self.update_network().await;
