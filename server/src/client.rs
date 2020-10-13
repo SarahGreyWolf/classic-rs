@@ -25,6 +25,7 @@ pub struct Client {
     id: u8,
     // The rank of the user, 0x64 for op, 0x00 for normal
     user_type: u8,
+    logged_in: bool,
     socket: TcpStream,
     n_tx: Sender<(u8, Vec<ClientBound>)>,
     current_x: i16,
@@ -41,6 +42,7 @@ impl Client {
             ip: sock.peer_addr().expect("Failed to get peers address").ip().to_string(),
             id,
             user_type: 0x00,
+            logged_in: false,
             socket: sock,
             n_tx,
             current_x: 0,
@@ -74,7 +76,6 @@ impl Client {
     pub async fn handle_connect(&mut self, world: Arc<Mutex<ClassicWorld>>) -> Result<(), tokio::io::Error> {
         let mut world_lock = world.try_lock().unwrap();
         let mut receive_buffer = [0 as u8; 1460];
-        let mut send_index: u8 = 0;
         self.socket.read(&mut receive_buffer).await?;
 
         let mut serverbound_packets: Vec<ServerBound> = Vec::new();
@@ -83,10 +84,19 @@ impl Client {
 
         let mut buffer_handled: usize = 0;
         while buffer_handled < receive_buffer[..].len() {
+            if self.logged_in && *&receive_buffer[buffer_handled] == 0x00 ||
+                receive_buffer[buffer_handled..buffer_handled +
+                    ServerBound::size(*&receive_buffer[buffer_handled])].len() == 0 {
+                break;
+            }
             serverbound_packets.push(
                 Packet::from(
-                    &receive_buffer[buffer_handled..ServerBound::size(*&receive_buffer[buffer_handled])])
+                    &receive_buffer[buffer_handled..buffer_handled +
+                            ServerBound::size(*&receive_buffer[buffer_handled])])
             );
+            if !self.logged_in {
+                self.logged_in = *&receive_buffer[buffer_handled] == 0x00;
+            }
             buffer_handled += ServerBound::size(*&receive_buffer[buffer_handled]);
         }
 

@@ -150,7 +150,7 @@ impl Heartbeat {
     pub async fn beat(&mut self) {
         let request_client = reqwest::Client::new();
         let request = request_client.post(Url::parse(&self.url)
-            .expect("Failed to parse to URL").join("/mineonline/listserver.jsp").unwrap()
+            .expect("Failed to parse to URL").join("/api/servers").unwrap()
         ).header("content-type", "application/json").body(self.request.clone());
         let response = request.send().await.expect("Failed to make post request");
         if response.status() != StatusCode::OK {
