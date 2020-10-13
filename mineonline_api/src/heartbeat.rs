@@ -146,6 +146,13 @@ impl Heartbeat {
     pub fn get_request(&self) -> &str {
         &self.request
     }
+
+    pub fn get_uuid(&self) -> &str {
+        &self.uuid
+    }
+    pub fn get_url(&self) -> &str {
+        &self.url
+    }
     /// Causes a heartbeat request to be made to the server
     pub async fn beat(&mut self) {
         let request_client = reqwest::Client::new();
@@ -161,5 +168,17 @@ impl Heartbeat {
                 self.uuid = json_response.uuid;
             }
         }
+    }
+    /// Delete the server from the server list
+    pub async fn delete(url: &str, uuid: &str) -> Result<(), std::io::Error> {
+        let request_client = reqwest::Client::new();
+        let end_url = format!("/api/servers/{}", uuid);
+        let request = request_client.delete(Url::parse(url)
+            .expect("Failed to parse URL").join(&end_url).unwrap());
+        let response = request.send().await.expect("Failed to make post request");
+        if response.status() != StatusCode::OK {
+            panic!("Heartbeat Request Failed: {}", response.status());
+        }
+        Ok(())
     }
 }
