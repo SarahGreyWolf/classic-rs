@@ -165,6 +165,10 @@ impl Packet<&[u8]> for ClientBound {
             }
         }
     }
+
+    fn size(id: u8) -> usize {
+        unimplemented!()
+    }
 }
 
 #[derive(Debug)]
@@ -233,5 +237,15 @@ impl Packet<&[u8]> for ServerBound {
 
     fn into(&self) -> Vec<u8> {
         unimplemented!()
+    }
+
+    fn size(id: u8) -> usize {
+        match id {
+            0x00 => 131,
+            0x05 => 9,
+            0x08 => 10,
+            0x0d => 66,
+            _ => 0
+        }
     }
 }

@@ -21,6 +21,7 @@ const STRING_LENGTH: usize = 64;
 
 pub struct Client {
     pub(crate) username: String,
+    ip: String,
     id: u8,
     // The rank of the user, 0x64 for op, 0x00 for normal
     user_type: u8,
@@ -37,6 +38,7 @@ impl Client {
     pub async fn new(id: u8, sock: TcpStream, n_tx: Sender<(u8, Vec<ClientBound>)>) -> Self {
         Self {
             username: "".to_string(),
+            ip: sock.peer_addr().expect("Failed to get peers address").ip().to_string(),
             id,
             user_type: 0x00,
             socket: sock,
@@ -51,6 +53,10 @@ impl Client {
 
     pub fn get_id(&self) -> u8 {
         self.id
+    }
+
+    pub fn get_ip(&self) -> String {
+        self.ip.clone()
     }
 
     pub async fn spawn_self(&self) -> ClientBound {
@@ -75,14 +81,13 @@ impl Client {
         let mut clientbound_packets: Vec<ClientBound> = Vec::new();
         let mut echo_packets: Vec<ClientBound> = Vec::new();
 
-        match receive_buffer[0] {
-            0x08 => {
-                serverbound_packets.push(Packet::from(&receive_buffer[0..10]));
-                serverbound_packets.push(Packet::from(&receive_buffer[10..]));
-            }
-            _ => {
-                serverbound_packets.push(Packet::from(receive_buffer.as_ref()));
-            }
+        let mut buffer_handled: usize = 0;
+        while buffer_handled < receive_buffer[..].len() {
+            serverbound_packets.push(
+                Packet::from(
+                    &receive_buffer[buffer_handled..ServerBound::size(*&receive_buffer[buffer_handled])])
+            );
+            buffer_handled += ServerBound::size(*&receive_buffer[buffer_handled]);
         }
 
         for packet in serverbound_packets {

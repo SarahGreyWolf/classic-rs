@@ -57,7 +57,6 @@ impl Server {
             "90632803F45C15164587256A08C0ECB4",
             config.server.whitelisted,
         );
-        mo_heartbeat.build_request();
 
         #[cfg(feature = "mojang_api")]
         let mut m_heartbeat = mojang_api::heartbeat::Heartbeat::new(
@@ -72,14 +71,15 @@ impl Server {
             7,
             config.server.whitelisted,
         );
-        m_heartbeat.build_request();
 
         #[cfg(feature = "mineonline_api")]
         if config.heartbeat.mineonline.active {
+            mo_heartbeat.build_request();
             mo_heartbeat.beat().await;
         }
         #[cfg(feature = "mojang_api")]
         if config.heartbeat.mojang.active {
+            m_heartbeat.build_request();
             m_heartbeat.beat().await;
         }
 
@@ -103,6 +103,7 @@ impl Server {
 
         let running = Arc::new(AtomicBool::new(true));
         let r = running.clone();
+
         #[cfg(feature = "mineonline_api")]
         let uuid = mo_heartbeat.get_uuid().to_string().clone();
         let url = mo_heartbeat.get_url().to_string().clone();

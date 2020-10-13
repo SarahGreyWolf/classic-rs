@@ -11,4 +11,6 @@ pub trait Packet<T> {
     fn from(buffer: T) -> Self;
     /// Create a buffer of Vec<u8> from a packet
     fn into(&self) -> Vec<u8>;
+    /// Returns the byte length of the packet
+    fn size(id: u8) -> usize;
 }
