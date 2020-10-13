@@ -110,9 +110,6 @@ impl Server {
 
         tokio::spawn(async move {
             ctrl_c().await.expect("Failed to listen for event");
-            #[cfg(feature = "mineonline_api")]
-            mineonline_api::heartbeat::Heartbeat::delete(&url, &uuid).await
-                .expect("Failed to send delete request");
 
             r.store(false, Ordering::SeqCst);
         });
@@ -127,7 +124,7 @@ impl Server {
             client_rx: rx,
             network_rx: n_rx,
             network_tx: n_tx,
-            world: Arc::new(Mutex::new(ClassicWorld::new(&"SarahWorld", 10, 10, 10))),
+            world: Arc::new(Mutex::new(ClassicWorld::new(&"SarahWorld", 32, 10, 32))),
             // ecs_world,
             config: Config::get(),
             clients: Vec::new(),
@@ -169,6 +166,24 @@ impl Server {
             self.clients[i].disconnect(&"Server shutting down")
                 .await.expect("Failed to disconnect user");
         }
+        #[cfg(feature = "mineonline_api")]
+        if self.config.heartbeat.mineonline.active {
+            self.mo_heartbeat.update_players(&Vec::new());
+            self.mo_heartbeat.update_users(0);
+            self.mo_heartbeat.build_request();
+            self.mo_heartbeat.beat().await;
+        }
+        #[cfg(feature = "mojang_api")]
+        if self.config.heartbeat.mojang.active {
+            self.m_heartbeat.update_users(0);
+            self.m_heartbeat.build_request();
+            self.m_heartbeat.beat().await;
+        }
+
+        #[cfg(feature = "mineonline_api")]
+        mineonline_api::heartbeat::Heartbeat::delete(&self.mo_heartbeat.get_url(),
+                                                     &self.mo_heartbeat.get_uuid()).await
+            .expect("Failed to send delete request");
 
         Ok(())
     }
@@ -178,7 +193,7 @@ impl Server {
     }
 
     async fn update_network(&mut self) {
-        let mut packet_buffer: (u8, Vec<ClientBound>) = (0, Vec::new());
+        let mut packet_buffer: Vec<(u8, Vec<ClientBound>)> = vec![(0, Vec::new())];
         loop {
             match self.client_rx.try_recv() {
                 Ok(client) => {
@@ -193,7 +208,7 @@ impl Server {
         }
         loop {
             match self.network_rx.try_recv() {
-                Ok(packets) => packet_buffer = packets,
+                Ok(packets) => packet_buffer.push(packets),
                 Err(flume::TryRecvError::Empty) => break,
                 Err(flume::TryRecvError::Disconnected) => {
                     break;
@@ -224,8 +239,11 @@ impl Server {
                     }
                 }
             }
-            if packet_buffer.0 != client.get_id() {
-                client.write_packets(&packet_buffer.1).await;
+            for i in 0..packet_buffer.len() {
+                let packets = &packet_buffer[i];
+                if packets.0 != client.get_id() {
+                    client.write_packets(&packets.1).await;
+                }
             }
             if closed {
                 for i in 0..self.usernames.len() {
@@ -235,6 +253,7 @@ impl Server {
                 }
                 clients.remove(c_pos);
                 self.beatdate = true;
+                break;
             }
         }
     }

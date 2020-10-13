@@ -108,57 +108,45 @@ impl Client {
                         self.username = username;
                         // debug!("{}", ver_key);
                         let config = Config::get();
-                        let mut name: [u8; STRING_LENGTH] = [0x20; STRING_LENGTH];
-                        for i in 0..config.server.name.len() {
-                            name[i] = config.server.name.as_bytes()[i];
-                        }
-                        let mut motd: [u8; STRING_LENGTH] = [0x20; STRING_LENGTH];
-                        for i in 0..config.server.motd.len() {
-                            motd[i] = config.server.motd.as_bytes()[i];
-                        }
                         self.write_packets(&vec![ClientBound::ServerIdentification(
                             7,
-                            name,
-                            motd,
+                            encode_string(&config.server.name),
+                            encode_string(&config.server.motd),
                             0x00,
                         ), ClientBound::LevelInitialize]).await;
                         self.send_blocks(world_lock.deref()).await.expect("Failed to send blocks");
                         let size = world_lock.get_size();
                         self.write_packets(&vec![
                             ClientBound::LevelFinalize(size[0], size[1], size[2]),
-                            ClientBound::SpawnPlayer(
-                                255,
-                                self.get_username_as_bytes(),
-                                5 * 32,
-                                7 * 32,
-                                5 * 32,
-                                0,
-                                0,
-                            ),
-                            ClientBound::PlayerTeleport(
-                                255,
-                                5 * 32,
-                                7 * 32,
-                                5 * 32,
-                                0,
-                                0,
-                            )
+                            // ClientBound::PlayerTeleport(
+                            //     255,
+                            //     5 * 32,
+                            //     7 * 32,
+                            //     5 * 32,
+                            //     0,
+                            //     0,
+                            // )
                         ]).await;
+                        echo_packets.push(ClientBound::SpawnPlayer(
+                            255,
+                            self.get_username_as_bytes(),
+                            5 * 32,
+                            8 * 32,
+                            5 * 32,
+                            0,
+                            0,
+                        ));
                         info!("{} joined the Server", self.username);
                         clientbound_packets.push(ClientBound::Message(255, {
                                 let msg = format!("{} joined the Server", self.username);
-                                let mut message: [u8; 64] = [0x20; 64];
-                                for i in 0..msg.len() {
-                                    message[i] = msg.as_bytes()[i];
-                                }
-                                message
+                                encode_string(&msg)
                             }
                         ));
                         clientbound_packets.push(ClientBound::SpawnPlayer(
                             self.id,
                             self.get_username_as_bytes(),
                             5 * 32,
-                            7 * 32,
+                            8 * 32,
                             5 * 32,
                             0,
                             0,
@@ -198,20 +186,20 @@ impl Client {
                     if pos_changed && ori_changed {
                         echo_packets.push(
                             ClientBound::PositionAndOrientationUpdate(
-                                255,
-                                (self.current_x - x) as i8,
-                                (self.current_y - y) as i8,
-                                (self.current_z - z) as i8,
+                                p_id,
+                                (self.current_x - -x) as i8,
+                                (self.current_y - -y) as i8,
+                                (self.current_z - -z) as i8,
                                 yaw,
                                 pitch
                             )
                         );
                         clientbound_packets.push(
                             ClientBound::PositionAndOrientationUpdate(
-                                p_id,
-                                (self.current_x - x) as i8,
-                                (self.current_y - y) as i8,
-                                (self.current_z - z) as i8,
+                                self.id,
+                                (self.current_x - -x) as i8,
+                                (self.current_y - -y) as i8,
+                                (self.current_z - -z) as i8,
                                 yaw,
                                 pitch
                             )
@@ -219,35 +207,37 @@ impl Client {
                     } else if pos_changed {
                         echo_packets.push(
                             ClientBound::PositionUpdate(
-                                255,
-                                (self.current_x - x) as i8,
-                                (self.current_y - y) as i8,
-                                (self.current_z - z) as i8,
+                                p_id,
+                                (self.current_x - -x) as i8,
+                                (self.current_y - -y) as i8,
+                                (self.current_z - -z) as i8,
                             )
                         );
                         clientbound_packets.push(
                             ClientBound::PositionUpdate(
-                                p_id,
-                                (self.current_x - x) as i8,
-                                (self.current_y - y) as i8,
-                                (self.current_z - z) as i8,
+                                self.id,
+                                (self.current_x - -x) as i8,
+                                (self.current_y - -y) as i8,
+                                (self.current_z - -z) as i8,
                             )
                         );
-                    } else {
+                    } else if ori_changed {
                         echo_packets.push(
                             ClientBound::OrientationUpdate(
-                                255,
+                                p_id,
                                 yaw,
                                 pitch
                             )
                         );
                         clientbound_packets.push(
                             ClientBound::OrientationUpdate(
-                                p_id,
+                                self.id,
                                 yaw,
                                 pitch
                             )
                         );
+                    } else {
+
                     }
 
                     self.current_x = x;
@@ -269,10 +259,7 @@ impl Client {
 
                     let msg = format!("<{}>: {}", self.username, f_msg);
                     info!("{}", msg);
-                    let mut message: [u8; 64] = [0x20; 64];
-                    for i in 0..msg.len() {
-                        message[i] = msg.as_bytes()[i];
-                    }
+                    let message = encode_string(&msg);
                     echo_packets.push(ClientBound::Message(self.id, message));
                     clientbound_packets.push(ClientBound::Message(self.id, message));
                 }
@@ -285,8 +272,6 @@ impl Client {
         }
         echo_packets.push(ClientBound::Ping);
 
-        self.write_packets(&vec![ClientBound::Ping]).await;
-
         self.write_packets(&echo_packets).await;
         self.n_tx.send((self.id, clientbound_packets)).expect("Failed to send Packets");
         Ok(())
@@ -294,11 +279,7 @@ impl Client {
 
     pub async fn disconnect(&mut self, msg: &str) -> Result<(), tokio::io::Error> {
         self.write_packets(&vec![ClientBound::DisconnectPlayer({
-            let mut message_bytes: [u8; 64] = [0x20; 64];
-            for i in 0..msg.len() {
-                message_bytes[i] = msg.as_bytes()[i];
-            }
-            message_bytes
+            encode_string(msg)
         })]).await;
 
         Ok(())
@@ -383,7 +364,7 @@ impl Client {
     }
 
     fn get_username_as_bytes(&self) -> [u8; 64] {
-        let mut username: [u8; 64] = [0u8; 64];
+        let mut username: [u8; 64] = [0x20; 64];
         for i in 0..username.len() {
             if i < self.username.len() {
                 username[i] = self.username.as_bytes()[i];
@@ -391,4 +372,13 @@ impl Client {
         }
         username
     }
+
+}
+
+fn encode_string(string: &str) -> [u8; 64] {
+    let mut string_bytes: [u8; 64] = [0x20; 64];
+    for i in 0..string.len() {
+        string_bytes[i] = string.as_bytes()[i];
+    }
+    string_bytes
 }
