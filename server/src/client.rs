@@ -118,15 +118,18 @@ impl Client {
                         let size = world_lock.get_size();
                         self.write_packets(&vec![
                             ClientBound::LevelFinalize(size[0], size[1], size[2]),
-                            // ClientBound::PlayerTeleport(
-                            //     255,
-                            //     5 * 32,
-                            //     7 * 32,
-                            //     5 * 32,
-                            //     0,
-                            //     0,
-                            // )
+                            ClientBound::PlayerTeleport(
+                                255,
+                                5 * 32,
+                                7 * 32,
+                                5 * 32,
+                                0,
+                                0,
+                            )
                         ]).await;
+                        self.current_x = 5 * 32;
+                        self.current_y = 7 * 32;
+                        self.current_z = 5 * 32;
                         echo_packets.push(ClientBound::SpawnPlayer(
                             255,
                             self.get_username_as_bytes(),
@@ -184,51 +187,26 @@ impl Client {
                         ori_changed = true;
                     }
                     if pos_changed && ori_changed {
-                        echo_packets.push(
-                            ClientBound::PositionAndOrientationUpdate(
-                                p_id,
-                                (self.current_x - -x) as i8,
-                                (self.current_y - -y) as i8,
-                                (self.current_z - -z) as i8,
-                                yaw,
-                                pitch
-                            )
-                        );
                         clientbound_packets.push(
                             ClientBound::PositionAndOrientationUpdate(
                                 self.id,
-                                (self.current_x - -x) as i8,
-                                (self.current_y - -y) as i8,
-                                (self.current_z - -z) as i8,
+                                -(self.current_x - x) as i8,
+                                -(self.current_y - y) as i8,
+                                -(self.current_z - z) as i8,
                                 yaw,
                                 pitch
                             )
                         );
                     } else if pos_changed {
-                        echo_packets.push(
-                            ClientBound::PositionUpdate(
-                                p_id,
-                                (self.current_x - -x) as i8,
-                                (self.current_y - -y) as i8,
-                                (self.current_z - -z) as i8,
-                            )
-                        );
                         clientbound_packets.push(
                             ClientBound::PositionUpdate(
                                 self.id,
-                                (self.current_x - -x) as i8,
-                                (self.current_y - -y) as i8,
-                                (self.current_z - -z) as i8,
+                                -(self.current_x - x) as i8,
+                                -(self.current_y - y) as i8,
+                                -(self.current_z - z) as i8,
                             )
                         );
                     } else if ori_changed {
-                        echo_packets.push(
-                            ClientBound::OrientationUpdate(
-                                p_id,
-                                yaw,
-                                pitch
-                            )
-                        );
                         clientbound_packets.push(
                             ClientBound::OrientationUpdate(
                                 self.id,
@@ -236,9 +214,7 @@ impl Client {
                                 pitch
                             )
                         );
-                    } else {
-
-                    }
+                    } else {}
 
                     self.current_x = x;
                     self.current_y = y;
@@ -286,7 +262,7 @@ impl Client {
     }
 
     async fn send_blocks(&mut self, world: &ClassicWorld) -> Result<(), tokio::io::Error> {
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
         encoder.write(&(world.get_blocks().len() as u32).to_be_bytes()).unwrap();
         encoder.write_all(world.get_blocks()).unwrap();
         let compressed = encoder.finish().expect("Failed to compress data");
