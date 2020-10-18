@@ -18,11 +18,12 @@ fn create_request() {
     let mineonline_json = "{\"ip\":\"0.0.0.0\",\
         \"port\":\"25565\",\
         \"users\":2,\
+        \"players\":[],\
         \"max\":20,\
         \"name\":\"TestServer\",\
         \"onlinemode\":\"true\",\
         \"md5\":\"0\",\
-        \"whitelisted\":true\"]}";
+        \"whitelisted\":true}";
 
 
     assert_eq!(heartbeat.build_request(), mineonline_json);
