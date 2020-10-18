@@ -64,9 +64,9 @@ impl Heartbeat {
     pub fn build_request(&mut self) -> String {
         let mut mineonline_json: Object = Object::new();
         mineonline_json.insert("ip",
-                               JsonValue::String(String::from(&self.ip)));
+                               JsonValue::String(self.ip.to_string()));
         mineonline_json.insert("port",
-                               JsonValue::String(String::from(&self.port.to_string())));
+                               JsonValue::String(self.port.to_string()));
         mineonline_json.insert("users",
                                JsonValue::Number(Number::from(self.users)));
         let players: Vec<JsonValue> = self.players_list.iter().map(
@@ -76,11 +76,11 @@ impl Heartbeat {
         mineonline_json.insert("max",
                                JsonValue::Number(Number::from(self.max_users)));
         mineonline_json.insert("name",
-                               JsonValue::String(String::from(&self.name)));
+                               JsonValue::String(self.name.to_string()));
         mineonline_json.insert("onlinemode",
-                               JsonValue::String(String::from(&self.online)));
+                               JsonValue::Boolean(self.online.to_string().parse().unwrap()));
         mineonline_json.insert("md5",
-                               JsonValue::String(String::from(&self.client_hash)));
+                               JsonValue::String(self.client_hash.to_string()));
         mineonline_json.insert("whitelisted",
                                JsonValue::Boolean(self.whitelisted));
         // TODO: Support Owner Name
