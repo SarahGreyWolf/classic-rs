@@ -27,12 +27,6 @@ pub struct Heartbeat {
     users: u16,
     players_list: Vec<String>,
     whitelisted: bool,
-    whitelisted_users: Vec<String>,
-    whitelisted_ips: Vec<String>,
-    whitelisted_uuids: Vec<String>,
-    banned_users: Vec<String>,
-    banned_ips: Vec<String>,
-    banned_uuids: Vec<String>,
     request: String,
 }
 
@@ -54,12 +48,6 @@ impl Heartbeat {
             users: 0,
             players_list: vec![],
             whitelisted,
-            whitelisted_users: vec![],
-            whitelisted_ips: vec![],
-            whitelisted_uuids: vec![],
-            banned_users: vec![],
-            banned_ips: vec![],
-            banned_uuids: vec![],
             request: "".to_string(),
         }
     }
@@ -71,19 +59,6 @@ impl Heartbeat {
     /// Update the usernames of users currently connected to the server in the heartbeat.
     pub fn update_players(&mut self, user_names: &Vec<String>) {
         self.players_list = user_names.to_vec();
-    }
-
-    /// Update the servers ban list in the heartbeat.
-    pub fn update_bans(&mut self, banned_users: Vec<String>, banned_ips: Vec<String>, banned_uuids: Vec<String>) {
-        self.banned_users = banned_users;
-        self.banned_ips = banned_ips;
-        self.banned_uuids = banned_uuids;
-    }
-    /// Update the servers whitelist in the heartbeat.
-    pub fn update_whitelist(&mut self, wl_users: Vec<String>, wl_ips: Vec<String>, wl_uuids: Vec<String>) {
-        self.whitelisted_users = wl_users;
-        self.whitelisted_ips = wl_ips;
-        self.whitelisted_uuids = wl_uuids;
     }
     /// Builds the request data from the heartbeat.
     pub fn build_request(&mut self) -> String {
@@ -108,25 +83,6 @@ impl Heartbeat {
                                JsonValue::String(String::from(&self.client_hash)));
         mineonline_json.insert("whitelisted",
                                JsonValue::Boolean(self.whitelisted));
-        mineonline_json.insert("whitelistUsers", JsonValue::Array(
-            self.whitelisted_users.iter()
-                .map(|x| JsonValue::String(String::from(x))).collect()));
-        mineonline_json.insert("whitelistIPs", JsonValue::Array(
-            self.whitelisted_ips.iter()
-                .map(|x| JsonValue::String(String::from(x))).collect()));
-        mineonline_json.insert("whitelistUUIDs", JsonValue::Array(
-            self.whitelisted_uuids.iter()
-                .map(|x| JsonValue::String(String::from(x))).collect()));
-        mineonline_json.insert("bannedUsers", JsonValue::Array(
-            self.banned_users.iter()
-                .map(|x| JsonValue::String(String::from(x))).collect()));
-        mineonline_json.insert("bannedIPs", JsonValue::Array(
-            self.banned_ips.iter()
-                .map(|x| JsonValue::String(String::from(x))).collect()));
-        mineonline_json.insert("bannedUUIDs", JsonValue::Array(
-            self.banned_uuids.iter()
-                .map(|x| JsonValue::String(String::from(x))).collect()));
-        // TODO: Support Players List
         // TODO: Support Owner Name
 
         let stringified = stringify(mineonline_json);
@@ -137,10 +93,6 @@ impl Heartbeat {
 
     pub fn get_user_count(&self) -> u16 {
         self.users
-    }
-
-    pub fn get_whitelist(&self) -> (&Vec<String>, &Vec<String>) {
-        (&self.whitelisted_users, &self.whitelisted_ips)
     }
 
     pub fn get_request(&self) -> &str {

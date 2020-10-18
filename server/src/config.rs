@@ -17,7 +17,7 @@ impl Default for MineOnline {
     fn default() -> Self {
         Self {
             active: true,
-            url: "http://mineonline.codie.gg".to_string()
+            url: "https://mineonline.codie.gg".to_string()
         }
     }
 }
@@ -68,8 +68,8 @@ pub struct Server {
 impl Default for Server {
     fn default() -> Self {
         Self {
-            ip: "0.0.0.0".to_string(),
-            local_ip: "0.0.0.0".to_string(),
+            ip: "127.0.0.1".to_string(),
+            local_ip: "127.0.0.1".to_string(),
             port: 25565,
             name: "A Minecraft Server".to_string(),
             motd: "A Minecraft Server".to_string(),
