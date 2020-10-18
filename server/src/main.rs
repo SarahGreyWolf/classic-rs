@@ -68,8 +68,7 @@ impl Server {
             config.server.max_players,
             config.server.online_mode,
             &salt,
-            7,
-            config.server.whitelisted,
+            7
         );
 
         #[cfg(feature = "mineonline_api")]

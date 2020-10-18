@@ -16,11 +16,6 @@ pub struct Heartbeat {
     protocol: u16,
     salt: String,
     users: u16,
-    whitelisted: bool,
-    whitelisted_users: Vec<String>,
-    whitelisted_ips: Vec<String>,
-    banned_users: Vec<String>,
-    banned_ips: Vec<String>,
     request: Vec<(String, String)>,
 }
 
@@ -28,7 +23,7 @@ impl Heartbeat {
     /// Create a Heartbeat Object.
     ///
     pub fn new(url: &str, ip: &str, port: u16, name: &str, public: bool, max_players: u16, online: bool,
-               salt: &str, protocol: u16, whitelisted: bool) -> Self {
+               salt: &str, protocol: u16) -> Self {
         Self {
             url: url.to_string(),
             ip: ip.to_string(),
@@ -40,28 +35,12 @@ impl Heartbeat {
             protocol,
             salt: salt.to_string(),
             users: 0,
-            whitelisted,
-            whitelisted_users: vec![],
-            whitelisted_ips: vec![],
-            banned_users: vec![],
-            banned_ips: vec![],
             request: vec![],
         }
     }
     /// Update the number of users currently connected to the server in the heartbeat.
     pub fn update_users(&mut self, user_count: u16) {
         self.users = user_count;
-    }
-
-    /// Update the servers ban list in the heartbeat.
-    pub fn update_bans(&mut self, banned_users: Vec<String>, banned_ips: Vec<String>) {
-        self.banned_users = banned_users;
-        self.banned_ips = banned_ips;
-    }
-    /// Update the servers whitelist in the heartbeat.
-    pub fn update_whitelist(&mut self, wl_users: Vec<String>, wl_ips: Vec<String>) {
-        self.whitelisted_users = wl_users;
-        self.whitelisted_ips = wl_ips;
     }
     /// Builds the request data from the heartbeat.
     pub fn build_request(&mut self) -> Vec<(String, String)> {
@@ -80,10 +59,6 @@ impl Heartbeat {
 
     pub fn get_user_count(&self) -> u16 {
         self.users
-    }
-
-    pub fn get_whitelist(&self) -> (&Vec<String>, &Vec<String>) {
-        (&self.whitelisted_users, &self.whitelisted_ips)
     }
 
     pub fn get_request(&self) -> Vec<(String, String)> {
