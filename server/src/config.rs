@@ -17,7 +17,7 @@ impl Default for MineOnline {
     fn default() -> Self {
         Self {
             active: true,
-            url: "https://mineonline.codie.gg".to_string()
+            url: "https://mineonline.codie.gg/".to_string()
         }
     }
 }
@@ -81,9 +81,32 @@ impl Default for Server {
     }
 }
 
+
+#[derive(Serialize, Deserialize)]
+pub struct Map {
+    pub name: String,
+    pub creator_username: String,
+    pub width: usize,
+    pub height: usize,
+    pub depth: usize,
+}
+
+impl Default for Map {
+    fn default() -> Self {
+        Self {
+            name: "".to_string(),
+            creator_username: "".to_string(),
+            width: 32,
+            height: 32,
+            depth: 32,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Config {
     pub server: Server,
+    pub map: Map,
     pub heartbeat: Heartbeat,
 }
 
@@ -92,6 +115,7 @@ impl Config {
         let path = PathBuf::from_str("./server.toml").expect("Could not get path");
         let config = Self {
             server: Server::default(),
+            map: Map::default(),
             heartbeat: Heartbeat::default(),
         };
         let out = to_string(&config)
@@ -108,7 +132,7 @@ impl Config {
                 file = f;
             },
             Err(e) => {
-                debug!("Error occurred reading string: {}", e);
+                debug!("Error occurred reading config file: {}", e);
                 file = Config::create();
             },
         }

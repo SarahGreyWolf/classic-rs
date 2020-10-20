@@ -45,6 +45,8 @@ impl Server {
     pub async fn new() -> Self {
         let config = Config::get();
         let salt: String = thread_rng().sample_iter(&Alphanumeric).take(16).collect();
+        let world: Arc<Mutex<ClassicWorld>>  = Arc::new(Mutex::new(ClassicWorld::new(
+            &config.map.name, config.map.width, config.map.height, config.map.depth)));
         #[cfg(feature = "mineonline_api")]
         let mut mo_heartbeat = mineonline_api::heartbeat::Heartbeat::new(
             &config.heartbeat.mineonline.url,
@@ -123,7 +125,7 @@ impl Server {
             client_rx: rx,
             network_rx: n_rx,
             network_tx: n_tx,
-            world: Arc::new(Mutex::new(ClassicWorld::new(&"SarahWorld", 32, 32, 32))),
+            world,
             // ecs_world,
             config: Config::get(),
             clients: Vec::new(),
@@ -217,7 +219,7 @@ impl Server {
 
         let mut clients = &mut self.clients;
 
-        for c_pos in 0..clients.len() {
+        for mut c_pos in 0..clients.len() {
             let client = &mut clients[c_pos];
             if client.username != "" && !self.usernames.contains(&client.username) {
                 self.usernames.push(client.username.clone());
@@ -252,7 +254,10 @@ impl Server {
                 }
                 clients.remove(c_pos);
                 self.beatdate = true;
-                break;
+                c_pos = c_pos - 1;
+                if c_pos + 1 == clients.len() {
+                    break;
+                }
             }
         }
     }
