@@ -159,7 +159,6 @@ impl Client {
                 ServerBound::SetBlock(x, y, z, mode, block) => {
                     let block = Block::from(block).clone();
                     if mode == 0x00 {
-                        debug!("{:#}:{:#}:{:#}", x, y, z);
                         world_lock.set_block(x as usize, y as usize, z as usize, Block::Air.into());
                         echo_packets.push(
                             ClientBound::SetBlock(x, y, z, Block::Air.into())
@@ -263,7 +262,7 @@ impl Client {
     }
 
     async fn send_blocks(&mut self, world: &ClassicWorld) -> Result<(), tokio::io::Error> {
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
         encoder.write(&(world.get_blocks().len() as u32).to_be_bytes()).unwrap();
         encoder.write_all(world.get_blocks()).unwrap();
         let compressed = encoder.finish().expect("Failed to compress data");
