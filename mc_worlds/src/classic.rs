@@ -223,11 +223,11 @@ pub struct ClassicWorld {
     /// Unique 128-bit world identifier
     uuid: [u8; 16],
     /// Width of the map
-    x: i16,
+    x: usize,
     /// Height of the map
-    y: i16,
+    y: usize,
     /// Length of the map
-    z: i16,
+    z: usize,
     /// (optional) Identifies the creator of the map
     created_by: Option<CreatedBy>,
     /// (optional) Contains data about map generation
@@ -241,17 +241,18 @@ pub struct ClassicWorld {
     /// Defines the point where the players spawn on the map
     spawn: Spawn,
     /// The block data, 1 byte per block, same order as LevelDataChunk Packet
-    block_array: Vec<u8>,
+    blocks: Vec<u8>,
     // metadata: Vec<Metadata>
 }
 
 impl ClassicWorld {
     //! Create a new empty world with a name aswell as dimensions
-    pub fn new(name: &str, x: i16, y: i16, z: i16) -> Self {
+    pub fn new(name: &str, x: usize, y: usize, z: usize) -> Self {
 
-        let mut block_array: Vec<u8> = (0..(x*y*z)).map(|k| Block::Air.into()).collect();
-        for i in 0..x*z*6 {
-            block_array[i as usize] = Block::GrassBlock.into();
+        let mut blocks: Vec<u8> =
+            (0..(x * y * z)).map(|k| Block::Air.into()).collect();
+        for i in 0..x * z * 6 {
+            blocks[i] = Block::GrassBlock.into();
         }
         Self {
             format_version: 1,
@@ -266,33 +267,33 @@ impl ClassicWorld {
             last_accessed: 0,
             last_modified: 0,
             spawn: Spawn {
-                x: x/2,
+                x: 0,
                 y,
-                z: z/2,
+                z: 0,
                 h: 0,
                 p: 0
             },
-            block_array
+            blocks
         }
     }
 
-    pub fn get_size(&self) -> [i16; 3] {
+    pub fn get_size(&self) -> [usize; 3] {
         [self.x, self.y, self.z]
     }
 
     pub fn get_blocks(&self) -> &Vec<u8> {
-        &self.block_array
+        &self.blocks
     }
 
-    pub fn set_block(&mut self, x: i16, y: i16, z: i16, block: Block) {
-        let pos = x + (self.x * z) + ((self.z * self.x)  * y);
+    pub fn set_block(&mut self, x: usize, y: usize, z: usize, block: Block) {
+        let pos = x + (self.x as usize * z) + ((self.z as usize * self.x as usize)  * y);
         if y < self.y {
-            self.block_array[pos as usize] = block.into();
+            self.blocks[pos as usize] = block.into();
         }
     }
-    pub fn get_block(&mut self, x: i16, y: i16, z: i16) -> Block {
-        let pos = x + (self.x * z) + ((self.z * self.x)  * y);
-        self.block_array[pos as usize].into()
+    pub fn get_block(&mut self, x: usize, y: usize, z: usize) -> Block {
+        let pos = x + (self.x as usize * z) + ((self.z as usize * self.x as usize)  * y);
+        self.blocks[pos as usize].into()
     }
 }
 
@@ -307,9 +308,9 @@ struct MapGenerator {
 }
 
 struct Spawn {
-    x: i16,
-    y: i16,
-    z: i16,
+    x: usize,
+    y: usize,
+    z: usize,
     // Heading
     h: u8,
     // Pitch

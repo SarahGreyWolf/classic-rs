@@ -159,7 +159,8 @@ impl Client {
                 ServerBound::SetBlock(x, y, z, mode, block) => {
                     let block = Block::from(block).clone();
                     if mode == 0x00 {
-                        world_lock.set_block(x, y, z, Block::Air.into());
+                        debug!("{:#}:{:#}:{:#}", x, y, z);
+                        world_lock.set_block(x as usize, y as usize, z as usize, Block::Air.into());
                         echo_packets.push(
                             ClientBound::SetBlock(x, y, z, Block::Air.into())
                         );
@@ -167,7 +168,7 @@ impl Client {
                             ClientBound::SetBlock(x, y, z, Block::Air.into())
                         );
                     } else {
-                        world_lock.set_block(x, y, z, block.into());
+                        world_lock.set_block(x as usize, y as usize, z as usize, block.into());
                         echo_packets.push(
                             ClientBound::SetBlock(x, y, z, block.into())
                         );
@@ -291,6 +292,8 @@ impl Client {
                 self.write_packets(&vec![world_packet]).await;
             }
         }
+
+        // self.write_packets(&vec![ClientBound::LevelDataChunk(1024, [0x00; 1024], 100)]).await;
 
         Ok(())
     }

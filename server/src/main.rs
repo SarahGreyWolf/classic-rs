@@ -123,7 +123,7 @@ impl Server {
             client_rx: rx,
             network_rx: n_rx,
             network_tx: n_tx,
-            world: Arc::new(Mutex::new(ClassicWorld::new(&"SarahWorld", 32, 10, 32))),
+            world: Arc::new(Mutex::new(ClassicWorld::new(&"SarahWorld", 32, 32, 32))),
             // ecs_world,
             config: Config::get(),
             clients: Vec::new(),

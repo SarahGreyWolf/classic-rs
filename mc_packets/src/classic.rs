@@ -19,7 +19,7 @@ pub enum ClientBound {
     Ping,
     LevelInitialize,
     LevelDataChunk(Short, ByteArray, u8),
-    LevelFinalize(Short, Short, Short),
+    LevelFinalize(usize, usize, usize),
     SetBlock(Short, Short, Short, u8),
     SpawnPlayer(u8, MString, Short, Short, Short, u8, u8),
     PlayerTeleport(u8, Short, Short, Short, u8, u8),
