@@ -57,7 +57,7 @@ impl Heartbeat {
     }
 
     /// Update the usernames of users currently connected to the server in the heartbeat.
-    pub fn update_players(&mut self, user_names: &Vec<String>) {
+    pub fn update_player_names(&mut self, user_names: &Vec<String>) {
         self.players_list = user_names.to_vec();
     }
     /// Builds the request data from the heartbeat.
@@ -115,10 +115,8 @@ impl Heartbeat {
         if response.status() != StatusCode::OK {
             panic!("Heartbeat Request Failed: {}", response.status());
         } else {
-            if self.uuid == "" {
-                let json_response = response.json::<Response>().await.expect("Failed to parse json");
-                self.uuid = json_response.uuid;
-            }
+            let json_response = response.json::<Response>().await.expect("Failed to parse json");
+            self.uuid = json_response.uuid;
         }
     }
     /// Delete the server from the server list
