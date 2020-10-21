@@ -3,7 +3,7 @@ use tokio::io::{AsyncWriteExt, AsyncReadExt, Error, ErrorKind};
 use flume::{Receiver, Sender};
 use log::{info, debug, error, warn};
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use std::io::Write;
@@ -84,9 +84,11 @@ impl Client {
 
         let mut buffer_handled: usize = 0;
         while buffer_handled < receive_buffer[..].len() {
-            if self.logged_in && *&receive_buffer[buffer_handled] == 0x00 ||
-                receive_buffer[buffer_handled..buffer_handled +
-                    ServerBound::size(*&receive_buffer[buffer_handled])].len() == 0 {
+            if self.logged_in && *&receive_buffer[buffer_handled] == 0x00  {
+                break;
+            }
+            if receive_buffer[buffer_handled..buffer_handled +
+                ServerBound::size(*&receive_buffer[buffer_handled])].len() == 0 {
                 break;
             }
             serverbound_packets.push(
@@ -114,28 +116,28 @@ impl Client {
                             encode_string(&config.server.motd),
                             0x00,
                         ), ClientBound::LevelInitialize]).await;
-                        self.send_blocks(world_lock.deref()).await.expect("Failed to send blocks");
+                        self.send_blocks(world_lock.deref_mut()).await.expect("Failed to send blocks");
                         let size = world_lock.get_size();
                         self.write_packets(&vec![
                             ClientBound::LevelFinalize(size[0], size[1], size[2]),
                             ClientBound::PlayerTeleport(
                                 255,
-                                5 * 32,
-                                7 * 32,
-                                5 * 32,
+                                ((size[0] / 2) * 32) as i16,
+                                ((size[1] / 2 + 1) * 32) as i16,
+                                ((size[2] / 2) * 32) as i16,
                                 0,
                                 0,
                             )
                         ]).await;
-                        self.current_x = 5 * 32;
-                        self.current_y = 7 * 32;
-                        self.current_z = 5 * 32;
+                        self.current_x = ((size[0] / 2) * 32) as i16;
+                        self.current_y = ((size[1] / 2) * 32) as i16;
+                        self.current_z = ((size[2] / 2) * 32) as i16;
                         echo_packets.push(ClientBound::SpawnPlayer(
                             255,
                             self.get_username_as_bytes(),
-                            5 * 32,
-                            8 * 32,
-                            5 * 32,
+                            ((size[0] / 2) * 32) as i16,
+                            ((size[1] / 2) * 32) as i16,
+                            ((size[2] / 2) * 32) as i16,
                             0,
                             0,
                         ));
@@ -180,6 +182,7 @@ impl Client {
                     p_id, x, y, z, yaw, pitch) => {
                     let mut pos_changed: bool = false;
                     let mut ori_changed: bool = false;
+                    let y = y - 1;
                     if x != self.current_x || y != self.current_y || z != self.current_z {
                         pos_changed = true;
                     }
@@ -261,11 +264,12 @@ impl Client {
         Ok(())
     }
 
-    async fn send_blocks(&mut self, world: &ClassicWorld) -> Result<(), tokio::io::Error> {
+    async fn send_blocks(&mut self, world: &mut ClassicWorld) -> Result<(), tokio::io::Error> {
         let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
         encoder.write(&(world.get_blocks().len() as u32).to_be_bytes()).unwrap();
-        encoder.write_all(world.get_blocks()).unwrap();
+        encoder.write_all(world.get_blocks().as_slice()).unwrap();
         let compressed = encoder.finish().expect("Failed to compress data");
+        // let compressed = world.get_gzipped();
         let mut sent: usize = 0;
         let mut left: usize = compressed.len();
 
