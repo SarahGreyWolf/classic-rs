@@ -1,6 +1,7 @@
 /target
 /.idea
 /logs
+/world
 *.ig
 Cargo.lock
 server.toml

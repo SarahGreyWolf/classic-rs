@@ -10,3 +10,10 @@ edition = "2018"
 
 [dependencies]
 byteorder = "1.3.4"
+tokio = {version="0.2.21", features=["rt-core", "io-std", "fs", "stream"]}
+flate2 = {version="1.0.18", features=["tokio"]}
+uuid = { version = "0.8.1", features=["v4"]}
+log = "0.4.11"
+hematite-nbt = "0.5.0"
+toml = "0.5.7"
+serde = {version="1.0.117", features=["derive"]}

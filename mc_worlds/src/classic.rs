@@ -1,4 +1,18 @@
 use byteorder::{LittleEndian};
+use std::time::{SystemTime, UNIX_EPOCH};
+use flate2::write::GzEncoder;
+use flate2::read::GzDecoder;
+use flate2::Compression;
+use std::io::Write;
+use std::path::PathBuf;
+use tokio::io::{Error, ErrorKind, BufReader};
+use tokio::fs::{File, read_dir, create_dir, DirEntry};
+use tokio::stream::StreamExt;
+use uuid;
+use uuid::Uuid;
+use log::debug;
+use nbt::from_gzip_reader;
+use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Copy, Clone)]
 pub enum Block {
@@ -173,6 +187,7 @@ pub trait Metadata {
 
 }
 
+#[allow(dead_code)]
 pub struct MineWorld {
     width: i32,
     height: i32,
@@ -221,7 +236,7 @@ pub struct ClassicWorld {
     /// World Name
     name: String,
     /// Unique 128-bit world identifier
-    uuid: [u8; 16],
+    uuid: uuid::Uuid,
     /// Width of the map
     x: usize,
     /// Height of the map
@@ -233,39 +248,48 @@ pub struct ClassicWorld {
     /// (optional) Contains data about map generation
     map_generator: Option<MapGenerator>,
     /// UTC Unix Timestamp of when the world was created
-    time_created: i64,
+    time_created: u64,
     /// UTC Unix Timestamp of when a player last accessed the world
-    last_accessed: i64,
+    last_accessed: u64,
     /// UTC Unix Timestamp set when blocks are modified
-    last_modified: i64,
+    last_modified: u64,
     /// Defines the point where the players spawn on the map
     spawn: Spawn,
     /// The block data, 1 byte per block, same order as LevelDataChunk Packet
     blocks: Vec<u8>,
+    /// A GzipEncoded version of the blocks Vec
+    gzipped: Vec<u8>,
     // metadata: Vec<Metadata>
 }
 
 impl ClassicWorld {
     //! Create a new empty world with a name aswell as dimensions
-    pub fn new(name: &str, x: usize, y: usize, z: usize) -> Self {
+    pub fn new(name: &str, author: &str, x: usize, y: usize, z: usize) -> Self {
 
         let mut blocks: Vec<u8> =
             (0..(x * y * z)).map(|k| Block::Air.into()).collect();
-        for i in 0..x * z * 6 {
+        // TODO: Split this into multiple threads handling multiple chunks at once and combine at the end
+        for i in 0..x * z * (y/2) {
             blocks[i] = Block::GrassBlock.into();
         }
+
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
+        encoder.write(&(blocks.len() as u32).to_be_bytes()).unwrap();
+        encoder.write_all(blocks.as_slice()).unwrap();
+        let compressed = encoder.finish().expect("Failed to compress data");
+
         Self {
             format_version: 1,
             name: name.to_string(),
-            uuid: [0u8; 16],
+            uuid: Uuid::new_v4(),
             x,
             y,
             z,
-            created_by: Some(CreatedBy { service: "".to_string(), username: "".to_string() }),
-            map_generator: Some(MapGenerator { service: "".to_string(), username: "".to_string() }),
-            time_created: 0,
-            last_accessed: 0,
-            last_modified: 0,
+            created_by: Some(CreatedBy { service: "Classic-RS".to_string(), username: author.to_string() }),
+            map_generator: Some(MapGenerator { service: "Classic-RS".to_string(), username: author.to_string() }),
+            time_created: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+            last_accessed: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+            last_modified: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
             spawn: Spawn {
                 x: 0,
                 y,
@@ -273,9 +297,124 @@ impl ClassicWorld {
                 h: 0,
                 p: 0
             },
-            blocks
+            blocks,
+            gzipped: compressed,
         }
     }
+
+    pub async fn from_buffer(name: &str, author: &str, x: usize, y: usize, z: usize, buffer: &[u8]) ->
+                                                                                                    ClassicWorld {
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
+        encoder.write(&(buffer.len() as u32).to_be_bytes()).unwrap();
+        encoder.write_all(buffer).unwrap();
+        let compressed = encoder.finish().expect("Failed to compress data");
+
+        Self {
+            format_version: 1,
+            name: name.to_string(),
+            uuid: Uuid::new_v4(),
+            x,
+            y,
+            z,
+            created_by: Some(CreatedBy { service: "Classic-RS".to_string(), username: author.to_string() }),
+            map_generator: Some(MapGenerator { service: "Classic-RS".to_string(), username: author.to_string() }),
+            time_created: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+            last_accessed: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+            last_modified: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+            spawn: Spawn {
+                x: 0,
+                y,
+                z: 0,
+                h: 0,
+                p: 0
+            },
+            blocks: buffer.to_vec(),
+            gzipped: compressed,
+        }
+    }
+
+    pub async fn get_or_create(name: &str, author: &str, x: usize, y: usize, z: usize) -> ClassicWorld {
+        let world_dir_path: PathBuf = PathBuf::from("./world");
+        let world_dir = match read_dir(&world_dir_path).await {
+            Ok(dir) => Some(dir),
+            Err(e) => {
+                if e.kind() == ErrorKind::NotFound {
+                    create_dir(&world_dir_path).await.expect("Failed to create world directory");
+                    Some(read_dir(&world_dir_path).await.unwrap())
+                }else{
+                    None
+                }
+            }
+        };
+        let contents: Vec<DirEntry> =
+            world_dir.unwrap().map(|f| f.expect("Failed to read entry")).collect().await;
+        if contents.is_empty() {
+            return ClassicWorld::new(name, author, x, y, z);
+        } else {
+            let cw_file: Option<&DirEntry> =
+                contents.iter().find(|e|
+                    e.file_name().to_str().unwrap()[e.file_name().len()-3..] == *".cw"
+                );
+            if cw_file.is_none(){
+                let crs_file: Option<&DirEntry> =
+                    contents.iter().find(|e|
+                        e.file_name().to_str().unwrap()[e.file_name().len()-4..] == *".crs"
+                    );
+                if let Some(crs) = crs_file {
+                    let reader: BufReader<File> = BufReader::new(File::open(crs.path()).await
+                        .expect("Failed to open CRS file"));
+                    return ClassicWorld::from_buffer(name, author, x, y, z, reader.buffer()).await;
+                }
+            } else {
+                // ClassicWorld::load_classic_world(File::open(cw_file.unwrap().path()).await
+                //     .expect("Failed to open File")).await;
+                return ClassicWorld::new(name, author, x, y, z);
+            }
+        }
+        return ClassicWorld::new(name, author, x, y, z);
+    }
+
+    // pub async fn load_classic_world(file: File) -> ClassicWorld {
+    //     let reader: BufReader<File> = BufReader::new(file);
+    //     #[derive(Serialize, Deserialize, Debug)]
+    //     struct C_By {
+    //         Service: String,
+    //         Username: String
+    //     }
+    //     #[derive(Serialize, Deserialize, Debug)]
+    //     struct M_Gen {
+    //         Service: String,
+    //         Username: String
+    //     }
+    //     #[derive(Serialize, Deserialize, Debug)]
+    //     struct Spwn {
+    //         X: i16,
+    //         Y: i16,
+    //         Z: i16,
+    //         H: u8,
+    //         P: u8
+    //     }
+    //     #[derive(Serialize, Deserialize, Debug)]
+    //     struct CWorld {
+    //         FormatVersion: u8,
+    //         Name: String,
+    //         UUID: [u8; 16],
+    //         X: i16,
+    //         Y: i16,
+    //         Z: i16,
+    //         CreatedBy: C_By,
+    //         MapGenerator: M_Gen,
+    //         TimeCreated: i64,
+    //         LastAccessed: i64,
+    //         LastModified: i64,
+    //         Spawn: Spwn,
+    //         BlockArray: Vec<u8>,
+    //         Metadata: Vec<u8>,
+    //     }
+    //     let nbt: CWorld = from_gzip_reader(reader.buffer()).expect("Failed to read NBT from gZip");
+    //     debug!("{:?}", nbt);
+    //     return ClassicWorld::new("", "", 16, 16, 16);
+    // }
 
     pub fn get_size(&self) -> [usize; 3] {
         [self.x, self.y, self.z]
@@ -290,11 +429,26 @@ impl ClassicWorld {
         if y < self.y {
             self.blocks[pos as usize] = block.into();
         }
+        self.last_modified = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
     }
     pub fn get_block(&mut self, x: usize, y: usize, z: usize) -> Block {
         let pos = x + (self.x as usize * z) + ((self.z as usize * self.x as usize)  * y);
         self.blocks[pos as usize].into()
     }
+
+    // pub fn get_gzipped(&mut self) -> &[u8] {
+    //     let current_time: u64 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    //     if current_time > (self.last_modified + 300) {
+    //         let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
+    //         encoder.write(&(self.blocks.len() as u32).to_be_bytes()).unwrap();
+    //         encoder.write_all(self.blocks.as_slice()).unwrap();
+    //         let compressed = encoder.finish().expect("Failed to compress data");
+    //         let c_clone = compressed.clone();
+    //         self.gzipped = c_clone;
+    //         self.last_modified = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    //     } else {}
+    //     &self.gzipped.as_slice()
+    // }
 }
 
 struct CreatedBy {
