@@ -3,6 +3,7 @@
 
 use rand::{thread_rng, Rng};
 use reqwest::{Body, Url, StatusCode};
+use std::time::Duration;
 
 /// Heartbeat Object
 pub struct Heartbeat {
@@ -66,15 +67,25 @@ impl Heartbeat {
     }
     /// Causes a heartbeat request to be made to the server
     pub async fn beat(&mut self) {
-        let request_client = reqwest::Client::new();
-        let request = request_client.post(Url::parse(&self.url)
-            .expect("Failed ot parse to URL")
-        ).form(&self.request);
-        // println!("Request: {:?}", request);
-        let response = request.send().await.expect("Failed to make post request");
-        // println!("Response: {:?}", response);
-        if response.status() != StatusCode::OK {
-            panic!("Heartbeat Request Failed: {}", response.status());
+        let mut retry: bool = true;
+        let mut tries: u8 = 0;
+        while retry && tries < 5 {
+            let request_client = reqwest::Client::new();
+            let request = request_client.post(Url::parse(&self.url)
+                .expect("Failed ot parse to URL")
+            ).form(&self.request);
+            // println!("Request: {:?}", request);
+            let response = request.send().await.expect("Failed to make post request");
+            // println!("Response: {:?}", response);
+            if response.status() != StatusCode::OK {
+                if tries == 5 {
+                    panic!("Heartbeat Request Failed: {}", response.status());
+                }
+                tries += 1;
+                std::thread::sleep(std::time::Duration::from_secs(2));
+            }else{
+                retry = false;
+            }
         }
     }
 }

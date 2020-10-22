@@ -107,16 +107,25 @@ impl Heartbeat {
     }
     /// Causes a heartbeat request to be made to the server
     pub async fn beat(&mut self) {
-        let request_client = reqwest::Client::new();
-        let request = request_client.post(Url::parse(&self.url)
-            .expect("Failed to parse to URL").join("/api/servers").unwrap()
-        ).header("content-type", "application/json").body(self.request.clone());
-        let response = request.send().await.expect("Failed to make post request");
-        if response.status() != StatusCode::OK {
-            panic!("Heartbeat Request Failed: {}", response.status());
-        } else {
-            let json_response = response.json::<Response>().await.expect("Failed to parse json");
-            self.uuid = json_response.uuid;
+        let mut retry: bool = true;
+        let mut tries: u8 = 0;
+        while retry && tries < 5 {
+            let request_client = reqwest::Client::new();
+            let request = request_client.post(Url::parse(&self.url)
+                .expect("Failed to parse to URL").join("/api/servers").unwrap()
+            ).header("content-type", "application/json").body(self.request.clone());
+            let response = request.send().await.expect("Failed to make post request");
+            if response.status() != StatusCode::OK {
+                if tries == 5 {
+                    panic!("Heartbeat Request Failed: {}", response.status());
+                }
+                tries += 1;
+                std::thread::sleep(std::time::Duration::from_secs(2));
+            } else {
+                let json_response = response.json::<Response>().await.expect("Failed to parse json");
+                self.uuid = json_response.uuid;
+                retry = false;
+            }
         }
     }
     /// Delete the server from the server list
