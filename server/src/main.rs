@@ -149,21 +149,26 @@ impl Server {
         let start = Instant::now();
         let mut end = Instant::now();
         while self.running.load(Ordering::SeqCst) {
-            let duration = end.duration_since(start);
+            let duration = Instant::now().duration_since(end);
 
             self.update_network().await;
             self.update_game().await;
 
 
             end = Instant::now();
+            if duration.as_millis() > 1000 {
+                warn!("Last tick took {:#}ms", duration.as_millis());
+            }
         }
 
-        info!("Disconnecting all Clients");
+        info!("Disconnecting all Clients..");
+        let start_disconnect = Instant::now();
         for i in 0..self.clients.len() {
             info!("Disconnecting {}", self.clients[i].username);
             self.clients[i].disconnect(&"Server shutting down")
                 .await.expect("Failed to disconnect user");
         }
+        info!("Disconnecting took {:?}ms", Instant::now().duration_since(start_disconnect));
 
         info!("Saving World...");
         let start_save = Instant::now();
@@ -217,7 +222,7 @@ impl Server {
                 self.beatdate.store(true, Ordering::SeqCst);
             }
             let mut closed = false;
-            match client.handle_connect(self.world.clone()).await {
+            match client.handle_connect(&self.salt, self.world.clone()).await {
                 Ok(_) => {},
                 Err(e) => {
                     if e.kind() == tokio::io::ErrorKind::ConnectionReset {
@@ -299,7 +304,6 @@ impl Server {
                     }
                     beatdate.store(false, Ordering::SeqCst);
                 }
-
                 end = Instant::now();
             }
         });
