@@ -354,7 +354,7 @@ impl ClassicWorld {
             let cw = ClassicWorld::new(name, author, x, y, z);
             cw.save_crs_file().await;
             info!("Took {:?} to load World", std::time::Instant::now()
-                .duration_since(start).as_millis());
+                .duration_since(start));
             return cw;
         } else {
             let cw_file: Option<&DirEntry> =
@@ -368,7 +368,7 @@ impl ClassicWorld {
                 let cw = ClassicWorld::new(name, author, x, y, z);
                 cw.save_crs_file().await;
                 info!("Took {:?} to load World", std::time::Instant::now()
-                    .duration_since(start).as_millis());
+                    .duration_since(start));
                 return cw;
             } else {
                 let crs_entry: Option<&DirEntry> =
@@ -380,7 +380,7 @@ impl ClassicWorld {
                     let cw = ClassicWorld::from_buffer(name, author, x, y, z,
                         ClassicWorld::load_crs_world(f, x*y*z).await.as_slice()).await;
                     info!("Took {:?} to load World", std::time::Instant::now()
-                        .duration_since(start).as_millis());
+                        .duration_since(start));
                     return cw;
                 }
             };
@@ -388,7 +388,7 @@ impl ClassicWorld {
         let cw = ClassicWorld::new(name, author, x, y, z);
         cw.save_crs_file().await;
         info!("Took {:?} to load World", std::time::Instant::now()
-            .duration_since(start).as_millis());
+            .duration_since(start));
         return cw;
     }
 
