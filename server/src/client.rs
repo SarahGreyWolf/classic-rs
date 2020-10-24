@@ -5,8 +5,7 @@ use flume::{Receiver, Sender};
 use log::{info, debug, error, warn};
 use std::sync::{Arc};
 use std::ops::{Deref, DerefMut};
-use flate2::Compression;
-use flate2::write::GzEncoder;
+use libflate::gzip::Encoder;
 use std::io::Write;
 use std::cell::{RefMut};
 
@@ -127,22 +126,22 @@ impl Client {
                             ClientBound::LevelFinalize(size[0], size[1], size[2]),
                             ClientBound::PlayerTeleport(
                                 255,
-                                ((size[0] / 2) * 32) as i16,
-                                (((size[1] / 2) + 3) * 32) as i16,
-                                ((size[2] / 2) * 32) as i16,
+                                ((size[0] / 2) * 32) as i16 + 2,
+                                (((size[1] / 2) + 2) * 32) as i16,
+                                ((size[2] / 2) * 32) as i16 + 2,
                                 0,
                                 0,
                             )
                         ]).await;
-                        self.current_x = ((size[0] / 2) * 32) as i16;
-                        self.current_y = (((size[1] / 2) + 3) * 32) as i16;
-                        self.current_z = ((size[2] / 2) * 32) as i16;
+                        self.current_x = ((size[0] / 2) * 32) as i16 + 2;
+                        self.current_y = (((size[1] / 2) + 2) * 32) as i16;
+                        self.current_z = ((size[2] / 2) * 32) as i16 + 2;
                         echo_packets.push(ClientBound::SpawnPlayer(
                             255,
                             self.get_username_as_bytes(),
-                            ((size[0] / 2) * 32) as i16,
-                            (((size[1] / 2) + 3) * 32) as i16,
-                            ((size[2] / 2) * 32) as i16,
+                            ((size[0] / 2) * 32) as i16 + 2,
+                            (((size[1] / 2) + 2) * 32) as i16,
+                            ((size[2] / 2) * 32) as i16 + 2,
                             0,
                             0,
                         ));
@@ -270,10 +269,16 @@ impl Client {
     }
 
     async fn send_blocks(&mut self, world: &mut ClassicWorld) -> Result<(), tokio::io::Error> {
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
+        let mut encoder = Encoder::new(Vec::new()).unwrap();
         encoder.write(&(world.get_blocks().len() as u32).to_be_bytes()).unwrap();
         encoder.write_all(world.get_blocks().as_slice()).unwrap();
-        let compressed = encoder.finish().expect("Failed to compress data");
+        let finished = encoder.finish().unwrap();
+        let mut compressed: Vec<u8> = Vec::new();
+        if finished.1.is_none() {
+            compressed = finished.0;
+        } else {
+            panic!("Failed to compress world");
+        }
         // let compressed = world.get_gzipped();
         let mut sent: usize = 0;
         let mut left: usize = compressed.len();

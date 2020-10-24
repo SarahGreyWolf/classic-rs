@@ -7,9 +7,10 @@ use fern::colors::{Color, ColoredLevelConfig};
 use log::{info, debug, error, warn, Level};
 use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
-use specs::{World, WorldExt, DispatcherBuilder, Builder};
+// use specs::{World, WorldExt, DispatcherBuilder, Builder};
 use std::sync::{Arc};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use mc_packets::Packet;
 use mc_packets::classic::{ClientBound, ServerBound};
@@ -18,12 +19,11 @@ use grey_mc_api::event;
 
 mod client;
 mod config;
-mod ecs;
+// mod ecs;
 
 use client::Client;
 use config::Config;
-use ecs::components::{common, player, entity};
-use std::sync::atomic::{AtomicBool, Ordering};
+// use ecs::components::{common, player, entity};
 
 struct Server {
     protocol: u8,
@@ -75,20 +75,21 @@ impl Server {
             &salt,
             7
         )));
-        // #[cfg(feature = "mineonline_api")]
-        if config.heartbeat.mineonline.active {
-            let mut mo_beat = mo_heartbeat.lock().await;
-            mo_beat.build_request();
-            mo_beat.beat().await;
-            drop(mo_beat);
-        }
-        // #[cfg(feature = "mojang_api")]
-        if config.heartbeat.mojang.active {
-            let mut m_beat = m_heartbeat.lock().await;
-            m_beat.build_request();
-            m_beat.beat().await;
-            drop(m_beat);
-        }
+        // TODO: Update Heartbeats to use Tokio 0.3.1
+        // // #[cfg(feature = "mineonline_api")]
+        // if config.heartbeat.mineonline.active {
+        //     let mut mo_beat = mo_heartbeat.lock().await;
+        //     mo_beat.build_request();
+        //     mo_beat.beat().await;
+        //     drop(mo_beat);
+        // }
+        // // #[cfg(feature = "mojang_api")]
+        // if config.heartbeat.mojang.active {
+        //     let mut m_beat = m_heartbeat.lock().await;
+        //     m_beat.build_request();
+        //     m_beat.beat().await;
+        //     drop(m_beat);
+        // }
 
         let (tx, rx) = flume::unbounded::<Client>();
         let local_ip = config.server.local_ip.clone();
@@ -123,7 +124,9 @@ impl Server {
         let beatdate = Arc::new(AtomicBool::new(false));
         let bd = beatdate.clone();
 
-        Server::spawn_heartbeats(r, mo_beat, m_beat, bd).await;
+        if config.heartbeat.mineonline.active && config.heartbeat.mojang.active {
+            // Server::spawn_heartbeats(r, mo_beat, m_beat, bd).await;
+        }
 
         Self {
             protocol: 7,
@@ -176,10 +179,10 @@ impl Server {
         info!("Saving took {:?}", Instant::now().duration_since(start_save));
 
         // #[cfg(feature = "mineonline_api")]
-        let mo_beat = &self.mo_heartbeat.lock().await;
-        mineonline_api::heartbeat::Heartbeat::delete(&mo_beat.get_url(),
-                                                     &mo_beat.get_uuid()).await
-            .expect("Failed to send delete request");
+        // let mo_beat = &self.mo_heartbeat.lock().await;
+        // mineonline_api::heartbeat::Heartbeat::delete(&mo_beat.get_url(),
+        //                                              &mo_beat.get_uuid()).await
+        //     .expect("Failed to send delete request");
 
         Ok(())
     }
@@ -189,8 +192,6 @@ impl Server {
     }
 
     async fn update_network(&mut self) {
-        let mut packet_buffer: Vec<(u8, Vec<ClientBound>)> = vec![(0, Vec::new())];
-        let mut player_cleanup: Vec<usize> = vec![];
         loop {
             match self.client_rx.try_recv() {
                 Ok(client) => {
@@ -203,71 +204,76 @@ impl Server {
                 }
             }
         }
-        loop {
-            match self.network_rx.try_recv() {
-                Ok(packets) => packet_buffer.push(packets),
-                Err(flume::TryRecvError::Empty) => break,
-                Err(flume::TryRecvError::Disconnected) => {
-                    break;
-                }
-            }
-        }
 
-        let mut clients = &mut self.clients;
-
-        for c_pos in 0..clients.len() {
-            let client = &mut clients[c_pos];
-            if client.username != "" && !self.usernames.contains(&client.username) {
-                self.usernames.push(client.username.clone());
-                self.beatdate.store(true, Ordering::SeqCst);
-            }
-            let mut closed = false;
-            match client.handle_connect(&self.salt, self.world.clone()).await {
-                Ok(_) => {},
-                Err(e) => {
-                    if e.kind() == tokio::io::ErrorKind::ConnectionReset {
-                        info!("{} has left the server", client.username);
-                        closed = true;
-                    } else if e.kind() == tokio::io::ErrorKind::ConnectionAborted {
-                        info!("{} has left the server", client.username);
-                        closed = true;
-                    } else {
-                        panic!("{}", e);
+        if self.clients.len() > 0 {
+            let mut packet_buffer: Vec<(u8, Vec<ClientBound>)> = vec![(0, Vec::new())];
+            let mut player_cleanup: Vec<usize> = vec![];
+            loop {
+                match self.network_rx.try_recv() {
+                    Ok(packets) => packet_buffer.push(packets),
+                    Err(flume::TryRecvError::Empty) => break,
+                    Err(flume::TryRecvError::Disconnected) => {
+                        break;
                     }
                 }
             }
-            for i in 0..packet_buffer.len() {
-                let packets = &packet_buffer[i];
-                if packets.0 != client.get_id() {
-                    client.write_packets(&packets.1).await;
+
+            let mut clients = &mut self.clients;
+
+            for c_pos in 0..clients.len() {
+                let client = &mut clients[c_pos];
+                if client.username != "" && !self.usernames.contains(&client.username) {
+                    self.usernames.push(client.username.clone());
+                    self.beatdate.store(true, Ordering::SeqCst);
                 }
-            }
-            if closed {
-                for i in 0..self.usernames.len() {
-                    if self.usernames[i] == client.username {
-                        self.usernames.remove(i);
+                let mut closed = false;
+                match client.handle_connect(&self.salt, self.world.clone()).await {
+                    Ok(_) => {},
+                    Err(e) => {
+                        if e.kind() == tokio::io::ErrorKind::ConnectionReset {
+                            info!("{} has left the server", client.username);
+                            closed = true;
+                        } else if e.kind() == tokio::io::ErrorKind::ConnectionAborted {
+                            info!("{} has left the server", client.username);
+                            closed = true;
+                        } else {
+                            panic!("{}", e);
+                        }
                     }
                 }
-                player_cleanup.push(c_pos);
-                self.beatdate.store(true, Ordering::SeqCst);
+                for i in 0..packet_buffer.len() {
+                    let packets = &packet_buffer[i];
+                    if packets.0 != client.get_id() {
+                        client.write_packets(&packets.1).await;
+                    }
+                }
+                if closed {
+                    for i in 0..self.usernames.len() {
+                        if self.usernames[i] == client.username {
+                            self.usernames.remove(i);
+                        }
+                    }
+                    player_cleanup.push(c_pos);
+                    self.beatdate.store(true, Ordering::SeqCst);
+                }
             }
+
+            for id in player_cleanup {
+                self.clients.remove(id);
+            }
+            player_cleanup = vec![];
+
+            // if self.config.heartbeat.mineonline.active {
+            //     let mut mo_beat = self.mo_heartbeat.lock().await;
+            //     mo_beat.update_player_names(&self.usernames);
+            //     mo_beat.update_users(self.clients.len() as u16);
+            // }
+            // if self.config.heartbeat.mojang.active {
+            //     let mut m_beat = self.m_heartbeat.lock().await;
+            //     m_beat.update_users(self.clients.len() as u16);
+            // }
         }
 
-        for id in player_cleanup {
-            self.clients.remove(id);
-        }
-
-        if self.config.heartbeat.mineonline.active {
-            let mut mo_beat = self.mo_heartbeat.lock().await;
-            mo_beat.update_player_names(&self.usernames);
-            mo_beat.update_users(self.clients.len() as u16);
-        }
-        if self.config.heartbeat.mojang.active {
-            let mut m_beat = self.m_heartbeat.lock().await;
-            m_beat.update_users(self.clients.len() as u16);
-        }
-
-        player_cleanup = vec![];
     }
 
     async fn listen(mut listener: TcpListener, tx: Sender<Client>, n_tx: Sender<(u8, Vec<ClientBound>)>)
@@ -286,26 +292,32 @@ impl Server {
     async fn spawn_heartbeats(running: Arc<AtomicBool>, mo_heartbeat: Arc<Mutex<mineonline_api::heartbeat::Heartbeat>>,
                               m_heartbeat: Arc<Mutex<mojang_api::heartbeat::Heartbeat>>, beatdate: Arc<AtomicBool>) {
         tokio::spawn(async move {
-            let start = Instant::now();
+            let mut start = Instant::now();
             let mut end = Instant::now();
             let config = Config::get();
-            while running.load(Ordering::SeqCst) {
-                let duration = end.duration_since(start);
-                if (duration.as_millis() % 40000) == 0 || beatdate.load(Ordering::SeqCst) {
-                    let mut mo_heartbeat = mo_heartbeat.lock().await;
-                    let mut m_heartbeat = m_heartbeat.lock().await;
-                    if config.heartbeat.mineonline.active {
-                        mo_heartbeat.build_request();
-                        mo_heartbeat.beat().await;
-                    }
-                    if config.heartbeat.mojang.active {
-                        m_heartbeat.build_request();
-                        m_heartbeat.beat().await;
-                    }
-                    beatdate.store(false, Ordering::SeqCst);
-                }
-                end = Instant::now();
-            }
+            // while running.load(Ordering::SeqCst) {
+                // let duration = end.duration_since(start);
+                // let bd = beatdate.load(Ordering::SeqCst);
+                // if duration.as_millis() >= 40000 || bd {
+                //     if config.heartbeat.mineonline.active {
+                //         let mut mo_heartbeat = mo_heartbeat.lock().await;
+                //         if mo_heartbeat.changed {
+                //             mo_heartbeat.build_request();
+                //         }
+                //         mo_heartbeat.beat().await;
+                //     }
+                //     if config.heartbeat.mojang.active {
+                //         let mut m_heartbeat = m_heartbeat.lock().await;
+                //         if m_heartbeat.changed {
+                //             m_heartbeat.build_request();
+                //         }
+                //         m_heartbeat.beat().await;
+                //     }
+                //     beatdate.store(false, Ordering::SeqCst);
+                //     start = Instant::now();
+                // }
+                // end = Instant::now();
+            // }
         });
     }
 }

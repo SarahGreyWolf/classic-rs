@@ -27,6 +27,7 @@ pub struct Heartbeat {
     users: u16,
     players_list: Vec<String>,
     whitelisted: bool,
+    pub changed: bool,
     request: String,
 }
 
@@ -48,17 +49,20 @@ impl Heartbeat {
             users: 0,
             players_list: vec![],
             whitelisted,
+            changed: true,
             request: "".to_string(),
         }
     }
     /// Update the number of users currently connected to the server in the heartbeat.
     pub fn update_users(&mut self, user_count: u16) {
         self.users = user_count;
+        self.changed = true;
     }
 
     /// Update the usernames of users currently connected to the server in the heartbeat.
     pub fn update_player_names(&mut self, user_names: &Vec<String>) {
         self.players_list = user_names.to_vec();
+        self.changed = true;
     }
     /// Builds the request data from the heartbeat.
     pub fn build_request(&mut self) -> String {
@@ -87,8 +91,8 @@ impl Heartbeat {
 
         let stringified = stringify(mineonline_json);
         self.request = (&stringified).parse().unwrap();
+        self.changed = false;
         stringified
-
     }
 
     pub fn get_user_count(&self) -> u16 {

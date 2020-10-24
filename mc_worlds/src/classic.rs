@@ -1,11 +1,9 @@
 use byteorder::{LittleEndian};
 use std::time::{SystemTime, UNIX_EPOCH};
-use flate2::write::GzEncoder;
-use flate2::read::GzDecoder;
-use flate2::Compression;
+use libflate::gzip::Encoder;
 use std::path::PathBuf;
 use std::io::{Write};
-use tokio::io::{Error, ErrorKind, BufWriter, AsyncWriteExt, BufReader, AsyncReadExt};
+use tokio::io::{Error, ErrorKind, BufReader, AsyncReadExt, BufWriter, AsyncWriteExt};
 use tokio::fs::{File, read_dir, create_dir, DirEntry, OpenOptions};
 use tokio::stream::StreamExt;
 use uuid;
@@ -274,10 +272,16 @@ impl ClassicWorld {
             blocks[i] = Block::GrassBlock.into();
         }
 
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
+        let mut encoder = Encoder::new(Vec::new()).expect("Failed to create GZipEncoder");
         encoder.write(&(blocks.len() as u32).to_be_bytes()).unwrap();
         encoder.write_all(blocks.as_slice()).unwrap();
-        let compressed = encoder.finish().expect("Failed to compress data");
+        let encoded = encoder.finish().unwrap();
+        let mut compressed: Vec<u8> = Vec::new();
+        if !encoded.1.is_none() {
+            compressed = encoded.0;
+        } else {
+            panic!("Failed to compress world");
+        }
 
         Self {
             format_version: 1,
@@ -305,11 +309,16 @@ impl ClassicWorld {
 
     pub async fn from_buffer(name: &str, author: &str, x: usize, y: usize, z: usize, buffer: &[u8]) ->
                                                                                                     ClassicWorld {
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
+        let mut encoder = Encoder::new(Vec::new()).expect("Failed to create GZipEncoder");
         encoder.write(&(buffer.len() as u32).to_be_bytes()).unwrap();
         encoder.write_all(buffer).unwrap();
-        let compressed = encoder.finish().expect("Failed to compress data");
-        // let mut buffer = buffer.clone().to_vec();
+        let encoded = encoder.finish().unwrap();
+        let mut compressed: Vec<u8> = Vec::new();
+        if !encoded.1.is_none() {
+            compressed = encoded.0;
+        } else {
+            panic!("Failed to compress world");
+        }
         Self {
             format_version: 1,
             name: name.to_string(),

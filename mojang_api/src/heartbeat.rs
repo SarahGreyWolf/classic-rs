@@ -17,6 +17,7 @@ pub struct Heartbeat {
     protocol: u16,
     salt: String,
     users: u16,
+    pub changed: bool,
     request: Vec<(String, String)>,
 }
 
@@ -36,12 +37,14 @@ impl Heartbeat {
             protocol,
             salt: salt.to_string(),
             users: 0,
+            changed: true,
             request: vec![],
         }
     }
     /// Update the number of users currently connected to the server in the heartbeat.
     pub fn update_users(&mut self, user_count: u16) {
         self.users = user_count;
+        self.changed = true;
     }
     /// Builds the request data from the heartbeat.
     pub fn build_request(&mut self) -> Vec<(String, String)> {
@@ -55,6 +58,7 @@ impl Heartbeat {
         query.push(("version".to_string(), self.protocol.to_string()));
         query.push(("salt".to_string(), self.salt.to_string()));
         self.request = query.clone();
+        self.changed = false;
         query
     }
 
