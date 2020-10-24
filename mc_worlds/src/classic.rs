@@ -10,7 +10,7 @@ use tokio::fs::{File, read_dir, create_dir, DirEntry, OpenOptions};
 use tokio::stream::StreamExt;
 use uuid;
 use uuid::Uuid;
-use log::debug;
+use log::{debug, info};
 use nbt::from_gzip_reader;
 use serde::{Serialize, Deserialize};
 use std::fs::Permissions;
@@ -376,7 +376,7 @@ impl ClassicWorld {
 
                     let cw = ClassicWorld::from_buffer(name, author, x, y, z,
                         ClassicWorld::load_crs_world(f, x*y*z).await.as_slice()).await;
-                    debug!("Took {:#}ms to load", std::time::Instant::now().duration_since(start).as_millis());
+                    info!("Took {:#}ms to load World", std::time::Instant::now().duration_since(start).as_millis());
                     return cw;
                 }
             };

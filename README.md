@@ -1,6 +1,7 @@
 # Classic-RS
 A (W.I.P) implementation of the minecraft classic server.\
 Aimed at supporting the project [Mineonline](http://mineonline.codie.gg/).
+![Image of Classic.RS written in game in Trans Colours](https://github.com/Master0r0/classic-mc-rs/screenshots/splash.png)
 
 ## Current Implemented
 - [x] Mojang Heartbeat
