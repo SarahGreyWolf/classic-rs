@@ -6,13 +6,14 @@ use flate2::Compression;
 use std::path::PathBuf;
 use std::io::{Write};
 use tokio::io::{Error, ErrorKind, BufWriter, AsyncWriteExt, BufReader, AsyncReadExt};
-use tokio::fs::{File, read_dir, create_dir, DirEntry};
+use tokio::fs::{File, read_dir, create_dir, DirEntry, OpenOptions};
 use tokio::stream::StreamExt;
 use uuid;
 use uuid::Uuid;
 use log::debug;
 use nbt::from_gzip_reader;
 use serde::{Serialize, Deserialize};
+use std::fs::Permissions;
 
 #[derive(Debug, Copy, Clone)]
 pub enum Block {
@@ -350,7 +351,7 @@ impl ClassicWorld {
             world_dir.unwrap().map(|f| f.expect("Failed to read entry")).collect().await;
         if contents.is_empty() {
             let cw = ClassicWorld::new(name, author, x, y, z);
-            cw.save_blocks().await;
+            cw.save_crs_file().await;
             return cw;
         } else {
             let cw_file: Option<&DirEntry> =
@@ -362,34 +363,44 @@ impl ClassicWorld {
                 // ClassicWorld::load_classic_world(File::open(cw_file.unwrap().path()).await
                 //     .expect("Failed to open File")).await;
                 let cw = ClassicWorld::new(name, author, x, y, z);
-                cw.save_blocks().await;
+                cw.save_crs_file().await;
                 return cw;
             } else {
-                let crs_file: Option<&DirEntry> =
+                let crs_entry: Option<&DirEntry> =
                     contents.iter().find(|e|
                         e.file_name().to_str().unwrap()[e.file_name().len()-4..] == *".crs"
                     );
-                if let Some(crs) = crs_file {
+                if let Some(crs) = crs_entry {
                     let start = std::time::Instant::now();
                     let f = File::open(crs.path()).await.expect("Failed to open CRS file");
-                    let mut buffer: Vec<u8> = Vec::with_capacity(x*y*z);
-                    // let mut reader: BufReader<File> = BufReader::with_capacity(x*y*z,f);
-                    let mut reader: BufReader<File> = BufReader::new(f);
-                    while buffer.len() < x*y*z {
-                        let mut temp_buf: Vec<u8> = Vec::with_capacity(16384);
-                        reader.read_buf(&mut temp_buf).await.expect("Failed to read buffer");
-                        buffer.append(&mut temp_buf);
-                        debug!("World Percentage Loaded: {:#}", (buffer.len() as f64/(x*y*z) as f64)*100.0);
-                    }
-                    let cw = ClassicWorld::from_buffer(name, author, x, y, z, &buffer).await;
+
+                    let cw = ClassicWorld::from_buffer(name, author, x, y, z,
+                        ClassicWorld::load_crs_world(f, x*y*z).await.as_slice()).await;
                     debug!("Took {:#}ms to load", std::time::Instant::now().duration_since(start).as_millis());
                     return cw;
                 }
             };
         }
         let cw = ClassicWorld::new(name, author, x, y, z);
-        cw.save_blocks().await;
+        cw.save_crs_file().await;
         return cw;
+    }
+
+    pub async fn load_crs_world(file: File, size: usize) -> Vec<u8> {
+        let mut buffer: Vec<u8> = Vec::with_capacity(size);
+        let mut reader: BufReader<File> = BufReader::new(file);
+        let mut percentage: usize = 0;
+        while buffer.len() < size {
+            let mut temp_buf: Vec<u8> = Vec::with_capacity(16384);
+            reader.read_buf(&mut temp_buf).await.expect("Failed to read buffer");
+            buffer.append(&mut temp_buf);
+            let c_percent = ((buffer.len() as f32/(size) as f32)*100.0) as usize;
+            if c_percent > percentage {
+                debug!("World Percentage Loaded: {:#}", c_percent);
+            }
+            percentage = c_percent;
+        }
+        buffer
     }
 
     // pub async fn load_classic_world(file: File) -> ClassicWorld {
@@ -434,9 +445,9 @@ impl ClassicWorld {
     //     return ClassicWorld::new("", "", 16, 16, 16);
     // }
 
-    pub async fn save_blocks(&self) {
+    pub async fn save_crs_file(&self) {
         let file_path = PathBuf::from(format!("./world/{}.crs", self.name));
-        let mut file: File = match File::open(file_path.as_path()).await {
+        let file: File = match OpenOptions::new().write(true).open(file_path.as_path()).await {
             Ok(f) => {
                 f
             },
