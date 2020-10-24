@@ -46,10 +46,11 @@ impl Server {
     pub async fn new() -> Self {
         let config = Config::get();
         let salt: String = thread_rng().sample_iter(&Alphanumeric).take(16).collect();
-        let world: Arc<Mutex<ClassicWorld>>  = Arc::new(Mutex::new(ClassicWorld::new(
-            &config.map.name, config.map.width, config.map.height, config.map.depth)));
+        let world: Arc<Mutex<ClassicWorld>>  = Arc::new(Mutex::new(ClassicWorld::get_or_create(
+            &config.map.name, &config.map.creator_username,
+            config.map.width, config.map.height, config.map.depth).await));
 
-        #[cfg(feature = "mineonline_api")]
+        // #[cfg(feature = "mineonline_api")]
         let mut mo_heartbeat = Arc::new(Mutex::new(mineonline_api::heartbeat::Heartbeat::new(
             &config.heartbeat.mineonline.url,
             &config.server.ip,
@@ -58,11 +59,11 @@ impl Server {
             config.server.public,
             config.server.max_players,
             config.server.online_mode,
-            "90632803F45C15164587256A08C0ECB4",
+            "1FD3397652112BB9E01E49DFE3E47893",
             config.server.whitelisted,
         )));
 
-        #[cfg(feature = "mojang_api")]
+        // #[cfg(feature = "mojang_api")]
         let mut m_heartbeat = Arc::new(Mutex::new(mojang_api::heartbeat::Heartbeat::new(
             &config.heartbeat.mojang.url,
             &config.server.ip,
@@ -74,14 +75,14 @@ impl Server {
             &salt,
             7
         )));
-        #[cfg(feature = "mineonline_api")]
+        // #[cfg(feature = "mineonline_api")]
         if config.heartbeat.mineonline.active {
             let mut mo_beat = mo_heartbeat.lock().await;
             mo_beat.build_request();
             mo_beat.beat().await;
             drop(mo_beat);
         }
-        #[cfg(feature = "mojang_api")]
+        // #[cfg(feature = "mojang_api")]
         if config.heartbeat.mojang.active {
             let mut m_beat = m_heartbeat.lock().await;
             m_beat.build_request();
@@ -164,7 +165,12 @@ impl Server {
                 .await.expect("Failed to disconnect user");
         }
 
-        #[cfg(feature = "mineonline_api")]
+        info!("Saving World...");
+        let start_save = Instant::now();
+        self.world.lock().await.save_crs_file().await;
+        info!("Saving took {:?}ms", Instant::now().duration_since(start_save));
+
+        // #[cfg(feature = "mineonline_api")]
         let mo_beat = &self.mo_heartbeat.lock().await;
         mineonline_api::heartbeat::Heartbeat::delete(&mo_beat.get_url(),
                                                      &mo_beat.get_uuid()).await

@@ -1,8 +1,9 @@
 use tokio::net::TcpStream;
 use tokio::io::{AsyncWriteExt, AsyncReadExt, Error, ErrorKind};
+use tokio::sync::{Mutex, MutexGuard};
 use flume::{Receiver, Sender};
 use log::{info, debug, error, warn};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc};
 use std::ops::{Deref, DerefMut};
 use flate2::Compression;
 use flate2::write::GzEncoder;
@@ -73,9 +74,9 @@ impl Client {
         )
     }
 
-    pub async fn handle_connect(&mut self, world: Arc<Mutex<ClassicWorld>>) -> Result<(), tokio::io::Error> {
-        let mut world_lock = world.try_lock().unwrap();
-        let mut receive_buffer = [0 as u8; 1460];
+    pub async fn handle_connect(&mut self, salt: &str, world: Arc<Mutex<ClassicWorld>>) -> Result<(), tokio::io::Error> {
+        let mut world_lock = world.lock().await;
+        let mut receive_buffer = [0x00; 1460];
         self.socket.read(&mut receive_buffer).await?;
 
         let mut serverbound_packets: Vec<ServerBound> = Vec::new();
@@ -83,12 +84,13 @@ impl Client {
         let mut echo_packets: Vec<ClientBound> = Vec::new();
 
         let mut buffer_handled: usize = 0;
-        while buffer_handled < receive_buffer[..].len() {
+        while buffer_handled < receive_buffer[..].len() &&
+            buffer_handled + ServerBound::size(*&receive_buffer[buffer_handled]) < receive_buffer.len() {
             if self.logged_in && *&receive_buffer[buffer_handled] == 0x00  {
                 break;
             }
             if receive_buffer[buffer_handled..buffer_handled +
-                ServerBound::size(*&receive_buffer[buffer_handled])].len() == 0 {
+                    ServerBound::size(*&receive_buffer[buffer_handled])].len() == 0 {
                 break;
             }
             serverbound_packets.push(
@@ -110,6 +112,9 @@ impl Client {
                         self.username = username;
                         // debug!("{}", ver_key);
                         let config = Config::get();
+                        if config.server.online_mode {
+                            
+                        }
                         self.write_packets(&vec![ClientBound::ServerIdentification(
                             7,
                             encode_string(&config.server.name),
@@ -123,20 +128,20 @@ impl Client {
                             ClientBound::PlayerTeleport(
                                 255,
                                 ((size[0] / 2) * 32) as i16,
-                                ((size[1] / 2 + 1) * 32) as i16,
+                                (((size[1] / 2) + 3) * 32) as i16,
                                 ((size[2] / 2) * 32) as i16,
                                 0,
                                 0,
                             )
                         ]).await;
                         self.current_x = ((size[0] / 2) * 32) as i16;
-                        self.current_y = ((size[1] / 2) * 32) as i16;
+                        self.current_y = (((size[1] / 2) + 3) * 32) as i16;
                         self.current_z = ((size[2] / 2) * 32) as i16;
                         echo_packets.push(ClientBound::SpawnPlayer(
                             255,
                             self.get_username_as_bytes(),
                             ((size[0] / 2) * 32) as i16,
-                            ((size[1] / 2) * 32) as i16,
+                            (((size[1] / 2) + 3) * 32) as i16,
                             ((size[2] / 2) * 32) as i16,
                             0,
                             0,
@@ -193,9 +198,9 @@ impl Client {
                         clientbound_packets.push(
                             ClientBound::PositionAndOrientationUpdate(
                                 self.id,
-                                -(self.current_x - x) as i8,
-                                -(self.current_y - y) as i8,
-                                -(self.current_z - z) as i8,
+                                (self.current_x - x) as i8,
+                                (self.current_y - y) as i8,
+                                (self.current_z - z) as i8,
                                 yaw,
                                 pitch
                             )
@@ -204,9 +209,9 @@ impl Client {
                         clientbound_packets.push(
                             ClientBound::PositionUpdate(
                                 self.id,
-                                -(self.current_x - x) as i8,
-                                -(self.current_y - y) as i8,
-                                -(self.current_z - z) as i8,
+                                (self.current_x - x) as i8,
+                                (self.current_y - y) as i8,
+                                (self.current_z - z) as i8,
                             )
                         );
                     } else if ori_changed {
@@ -296,8 +301,6 @@ impl Client {
             }
         }
 
-        // self.write_packets(&vec![ClientBound::LevelDataChunk(1024, [0x00; 1024], 100)]).await;
-
         Ok(())
     }
 
@@ -313,7 +316,7 @@ impl Client {
                     Ok(_) => {}
                     Err(e) => {
                         if e.kind() == ErrorKind::ConnectionAborted {
-                            // debug!("Fucked Before");
+
                         } else {
                             panic!("Error: {:?}", e);
                         }
@@ -336,13 +339,12 @@ impl Client {
             Ok(_) => {}
             Err(e) => {
                 if e.kind() == ErrorKind::ConnectionAborted {
-                    // debug!("Fucked Before");
+
                 } else {
                     panic!("Error: {:?}", e);
                 }
             }
         }
-        // debug!("{:x?}, {:x?}", packets, packet_buffer);
     }
 
     fn get_username_as_bytes(&self) -> [u8; 64] {
