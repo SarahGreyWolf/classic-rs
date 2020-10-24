@@ -168,12 +168,12 @@ impl Server {
             self.clients[i].disconnect(&"Server shutting down")
                 .await.expect("Failed to disconnect user");
         }
-        info!("Disconnecting took {:?}ms", Instant::now().duration_since(start_disconnect));
+        info!("Disconnecting took {:?}", Instant::now().duration_since(start_disconnect));
 
         info!("Saving World...");
         let start_save = Instant::now();
         self.world.lock().await.save_crs_file().await;
-        info!("Saving took {:?}ms", Instant::now().duration_since(start_save));
+        info!("Saving took {:?}", Instant::now().duration_since(start_save));
 
         // #[cfg(feature = "mineonline_api")]
         let mo_beat = &self.mo_heartbeat.lock().await;

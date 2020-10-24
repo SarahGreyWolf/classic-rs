@@ -353,7 +353,7 @@ impl ClassicWorld {
         if contents.is_empty() {
             let cw = ClassicWorld::new(name, author, x, y, z);
             cw.save_crs_file().await;
-            info!("Took {:#}ms to load World", std::time::Instant::now()
+            info!("Took {:?} to load World", std::time::Instant::now()
                 .duration_since(start).as_millis());
             return cw;
         } else {
@@ -367,7 +367,7 @@ impl ClassicWorld {
                 //     .expect("Failed to open File")).await;
                 let cw = ClassicWorld::new(name, author, x, y, z);
                 cw.save_crs_file().await;
-                info!("Took {:#}ms to load World", std::time::Instant::now()
+                info!("Took {:?} to load World", std::time::Instant::now()
                     .duration_since(start).as_millis());
                 return cw;
             } else {
@@ -379,7 +379,7 @@ impl ClassicWorld {
                     let f = File::open(crs.path()).await.expect("Failed to open CRS file");
                     let cw = ClassicWorld::from_buffer(name, author, x, y, z,
                         ClassicWorld::load_crs_world(f, x*y*z).await.as_slice()).await;
-                    info!("Took {:#}ms to load World", std::time::Instant::now()
+                    info!("Took {:?} to load World", std::time::Instant::now()
                         .duration_since(start).as_millis());
                     return cw;
                 }
@@ -387,7 +387,7 @@ impl ClassicWorld {
         }
         let cw = ClassicWorld::new(name, author, x, y, z);
         cw.save_crs_file().await;
-        info!("Took {:#}ms to load World", std::time::Instant::now()
+        info!("Took {:?} to load World", std::time::Instant::now()
             .duration_since(start).as_millis());
         return cw;
     }
@@ -402,7 +402,7 @@ impl ClassicWorld {
             buffer.append(&mut temp_buf);
             let c_percent = ((buffer.len() as f32/(size) as f32)*100.0) as usize;
             if c_percent > percentage {
-                debug!("World Percentage Loaded: {:#}", c_percent);
+                debug!("World Percentage Loaded: {:#}%", c_percent);
             }
             percentage = c_percent;
         }
