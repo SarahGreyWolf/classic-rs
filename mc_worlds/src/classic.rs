@@ -335,6 +335,7 @@ impl ClassicWorld {
     }
 
     pub async fn get_or_create(name: &str, author: &str, x: usize, y: usize, z: usize) -> ClassicWorld {
+        let start = std::time::Instant::now();
         let world_dir_path: PathBuf = PathBuf::from("./world");
         let world_dir = match read_dir(&world_dir_path).await {
             Ok(dir) => Some(dir),
@@ -352,6 +353,8 @@ impl ClassicWorld {
         if contents.is_empty() {
             let cw = ClassicWorld::new(name, author, x, y, z);
             cw.save_crs_file().await;
+            info!("Took {:#}ms to load World", std::time::Instant::now()
+                .duration_since(start).as_millis());
             return cw;
         } else {
             let cw_file: Option<&DirEntry> =
@@ -364,25 +367,28 @@ impl ClassicWorld {
                 //     .expect("Failed to open File")).await;
                 let cw = ClassicWorld::new(name, author, x, y, z);
                 cw.save_crs_file().await;
+                info!("Took {:#}ms to load World", std::time::Instant::now()
+                    .duration_since(start).as_millis());
                 return cw;
             } else {
                 let crs_entry: Option<&DirEntry> =
                     contents.iter().find(|e|
-                        e.file_name().to_str().unwrap()[e.file_name().len()-4..] == *".crs"
+                        e.file_name().to_str().unwrap() == format!("{}.crs", name)
                     );
                 if let Some(crs) = crs_entry {
-                    let start = std::time::Instant::now();
                     let f = File::open(crs.path()).await.expect("Failed to open CRS file");
-
                     let cw = ClassicWorld::from_buffer(name, author, x, y, z,
                         ClassicWorld::load_crs_world(f, x*y*z).await.as_slice()).await;
-                    info!("Took {:#}ms to load World", std::time::Instant::now().duration_since(start).as_millis());
+                    info!("Took {:#}ms to load World", std::time::Instant::now()
+                        .duration_since(start).as_millis());
                     return cw;
                 }
             };
         }
         let cw = ClassicWorld::new(name, author, x, y, z);
         cw.save_crs_file().await;
+        info!("Took {:#}ms to load World", std::time::Instant::now()
+            .duration_since(start).as_millis());
         return cw;
     }
 
