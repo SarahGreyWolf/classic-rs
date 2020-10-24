@@ -3,9 +3,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use flate2::write::GzEncoder;
 use flate2::read::GzDecoder;
 use flate2::Compression;
-use std::io::Write;
 use std::path::PathBuf;
-use tokio::io::{Error, ErrorKind, BufReader};
+use std::io::{Write};
+use tokio::io::{Error, ErrorKind, BufWriter, AsyncWriteExt, BufReader, AsyncReadExt};
 use tokio::fs::{File, read_dir, create_dir, DirEntry};
 use tokio::stream::StreamExt;
 use uuid;
@@ -308,7 +308,7 @@ impl ClassicWorld {
         encoder.write(&(buffer.len() as u32).to_be_bytes()).unwrap();
         encoder.write_all(buffer).unwrap();
         let compressed = encoder.finish().expect("Failed to compress data");
-
+        // let mut buffer = buffer.clone().to_vec();
         Self {
             format_version: 1,
             name: name.to_string(),
@@ -342,36 +342,54 @@ impl ClassicWorld {
                     create_dir(&world_dir_path).await.expect("Failed to create world directory");
                     Some(read_dir(&world_dir_path).await.unwrap())
                 }else{
-                    None
+                    panic!("Failed to read from World Directory: {}", e);
                 }
             }
         };
         let contents: Vec<DirEntry> =
             world_dir.unwrap().map(|f| f.expect("Failed to read entry")).collect().await;
         if contents.is_empty() {
-            return ClassicWorld::new(name, author, x, y, z);
+            let cw = ClassicWorld::new(name, author, x, y, z);
+            cw.save_blocks().await;
+            return cw;
         } else {
             let cw_file: Option<&DirEntry> =
                 contents.iter().find(|e|
                     e.file_name().to_str().unwrap()[e.file_name().len()-3..] == *".cw"
                 );
-            if cw_file.is_none(){
+
+            if let Some(cw) = cw_file {
+                // ClassicWorld::load_classic_world(File::open(cw_file.unwrap().path()).await
+                //     .expect("Failed to open File")).await;
+                let cw = ClassicWorld::new(name, author, x, y, z);
+                cw.save_blocks().await;
+                return cw;
+            } else {
                 let crs_file: Option<&DirEntry> =
                     contents.iter().find(|e|
                         e.file_name().to_str().unwrap()[e.file_name().len()-4..] == *".crs"
                     );
                 if let Some(crs) = crs_file {
-                    let reader: BufReader<File> = BufReader::new(File::open(crs.path()).await
-                        .expect("Failed to open CRS file"));
-                    return ClassicWorld::from_buffer(name, author, x, y, z, reader.buffer()).await;
+                    let start = std::time::Instant::now();
+                    let f = File::open(crs.path()).await.expect("Failed to open CRS file");
+                    let mut buffer: Vec<u8> = Vec::with_capacity(x*y*z);
+                    // let mut reader: BufReader<File> = BufReader::with_capacity(x*y*z,f);
+                    let mut reader: BufReader<File> = BufReader::new(f);
+                    while buffer.len() < x*y*z {
+                        let mut temp_buf: Vec<u8> = Vec::with_capacity(16384);
+                        reader.read_buf(&mut temp_buf).await.expect("Failed to read buffer");
+                        buffer.append(&mut temp_buf);
+                        debug!("World Percentage Loaded: {:#}", (buffer.len() as f64/(x*y*z) as f64)*100.0);
+                    }
+                    let cw = ClassicWorld::from_buffer(name, author, x, y, z, &buffer).await;
+                    debug!("Took {:#}ms to load", std::time::Instant::now().duration_since(start).as_millis());
+                    return cw;
                 }
-            } else {
-                // ClassicWorld::load_classic_world(File::open(cw_file.unwrap().path()).await
-                //     .expect("Failed to open File")).await;
-                return ClassicWorld::new(name, author, x, y, z);
-            }
+            };
         }
-        return ClassicWorld::new(name, author, x, y, z);
+        let cw = ClassicWorld::new(name, author, x, y, z);
+        cw.save_blocks().await;
+        return cw;
     }
 
     // pub async fn load_classic_world(file: File) -> ClassicWorld {
@@ -416,6 +434,24 @@ impl ClassicWorld {
     //     return ClassicWorld::new("", "", 16, 16, 16);
     // }
 
+    pub async fn save_blocks(&self) {
+        let file_path = PathBuf::from(format!("./world/{}.crs", self.name));
+        let mut file: File = match File::open(file_path.as_path()).await {
+            Ok(f) => {
+                f
+            },
+            Err(e) => {
+                if e.kind() == ErrorKind::NotFound {
+                    File::create(file_path.as_path()).await.expect("Failed to create File")
+                } else{
+                    panic!("Failed to get save file: {:?}", e);
+                }
+            }
+        };
+        let mut writer: BufWriter<File> = BufWriter::new(file);
+        writer.write_all(self.blocks.as_slice()).await.expect("Failed to write to world file");
+    }
+
     pub fn get_size(&self) -> [usize; 3] {
         [self.x, self.y, self.z]
     }
@@ -431,6 +467,7 @@ impl ClassicWorld {
         }
         self.last_modified = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
     }
+
     pub fn get_block(&mut self, x: usize, y: usize, z: usize) -> Block {
         let pos = x + (self.x as usize * z) + ((self.z as usize * self.x as usize)  * y);
         self.blocks[pos as usize].into()
