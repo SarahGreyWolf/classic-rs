@@ -31,6 +31,8 @@ Aimed at supporting the project [Mineonline](http://mineonline.codie.gg/).
     - [ ] [ClassicWorld Format](https://wiki.vg/ClassicWorld_file_format)
         - [ ] Loading
         - [ ] Saving
+        - [X] Loading as CRS Binary
+        - [X] Saving as CRS Binary
         - [X] Creation (A flat world)
     - [ ] Classic DAT Format
         - [ ] Loading
