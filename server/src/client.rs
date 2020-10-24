@@ -241,7 +241,7 @@ impl Client {
                         }
                     }
 
-                    let msg = format!("<{}>: {}", self.username, f_msg);
+                    let msg = format!("{}: {}", self.username, f_msg);
                     info!("{}", msg);
                     let message = encode_string(&msg);
                     echo_packets.push(ClientBound::Message(self.id, message));
@@ -362,6 +362,9 @@ impl Client {
 fn encode_string(string: &str) -> [u8; 64] {
     let mut string_bytes: [u8; 64] = [0x20; 64];
     for i in 0..string.len() {
+        if i > string_bytes.len() {
+            break;
+        }
         string_bytes[i] = string.as_bytes()[i];
     }
     string_bytes
