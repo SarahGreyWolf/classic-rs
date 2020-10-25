@@ -96,8 +96,9 @@ impl Server {
         let tx_clone = tx.clone();
         let (n_tx, n_rx) = flume::unbounded::<(u8, Vec<ClientBound>)>();
         let n_tx_clone = n_tx.clone();
+
         tokio::spawn(async move {
-            let listener = TcpListener::bind(format!("{}:{:#}", local_ip, port, )).
+            let listener = TcpListener::bind(format!("{}:{:#}", local_ip, port)).
                 await.expect("Failed to bind");
             Server::listen(listener, tx_clone, n_tx_clone).await.expect("Failed to listen");
         });
