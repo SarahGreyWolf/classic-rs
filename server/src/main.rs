@@ -48,7 +48,7 @@ impl Server {
         let salt: String = thread_rng().sample_iter(&Alphanumeric).take(16).collect();
         let world: Arc<Mutex<ClassicWorld>>  = Arc::new(Mutex::new(ClassicWorld::get_or_create(
             &config.map.name, &config.map.creator_username,
-            config.map.width, config.map.height, config.map.depth).await));
+            config.map.x_width, config.map.y_height, config.map.z_depth).await));
 
         // #[cfg(feature = "mineonline_api")]
         let mut mo_heartbeat = Arc::new(Mutex::new(mineonline_api::heartbeat::Heartbeat::new(
