@@ -86,9 +86,9 @@ impl Default for Server {
 pub struct Map {
     pub name: String,
     pub creator_username: String,
-    pub width: usize,
-    pub height: usize,
-    pub depth: usize,
+    pub x_width: usize,
+    pub y_height: usize,
+    pub z_depth: usize,
 }
 
 impl Default for Map {
@@ -96,9 +96,9 @@ impl Default for Map {
         Self {
             name: "".to_string(),
             creator_username: "".to_string(),
-            width: 32,
-            height: 32,
-            depth: 32,
+            x_width: 32,
+            y_height: 32,
+            z_depth: 32,
         }
     }
 }
