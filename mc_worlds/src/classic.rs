@@ -256,8 +256,8 @@ pub struct ClassicWorld {
     spawn: Spawn,
     /// The block data, 1 byte per block, same order as LevelDataChunk Packet
     blocks: Vec<u8>,
-    /// A GzipEncoded version of the blocks Vec
-    gzipped: Vec<u8>,
+    // /// A GzipEncoded version of the blocks Vec
+    // gzipped: Vec<u8>,
     // metadata: Vec<Metadata>
 }
 
@@ -272,16 +272,16 @@ impl ClassicWorld {
             blocks[i] = Block::GrassBlock.into();
         }
 
-        let mut encoder = Encoder::new(Vec::new()).expect("Failed to create GZipEncoder");
-        encoder.write(&(blocks.len() as u32).to_be_bytes()).unwrap();
-        encoder.write_all(blocks.as_slice()).unwrap();
-        let encoded = encoder.finish().unwrap();
-        let mut compressed: Vec<u8> = Vec::new();
-        if !encoded.1.is_none() {
-            compressed = encoded.0;
-        } else {
-            panic!("Failed to compress world");
-        }
+        // let mut encoder = Encoder::new(Vec::new()).expect("Failed to create GZipEncoder");
+        // encoder.write(&(blocks.len() as u32).to_be_bytes()).unwrap();
+        // encoder.write_all(blocks.as_slice()).unwrap();
+        // let encoded = encoder.finish().unwrap();
+        // let mut compressed: Vec<u8> = Vec::new();
+        // if !encoded.1.is_none() {
+        //     compressed = encoded.0;
+        // } else {
+        //     panic!("Failed to compress world");
+        // }
 
         Self {
             format_version: 1,
@@ -303,22 +303,22 @@ impl ClassicWorld {
                 p: 0
             },
             blocks,
-            gzipped: compressed,
+            // gzipped: compressed,
         }
     }
 
     pub async fn from_buffer(name: &str, author: &str, x: usize, y: usize, z: usize, buffer: &[u8]) ->
                                                                                                     ClassicWorld {
-        let mut encoder = Encoder::new(Vec::new()).expect("Failed to create GZipEncoder");
-        encoder.write(&(buffer.len() as u32).to_be_bytes()).unwrap();
-        encoder.write_all(buffer).unwrap();
-        let encoded = encoder.finish().unwrap();
-        let mut compressed: Vec<u8> = Vec::new();
-        if !encoded.1.is_none() {
-            compressed = encoded.0;
-        } else {
-            panic!("Failed to compress world");
-        }
+        // let mut encoder = Encoder::new(Vec::new()).expect("Failed to create GZipEncoder");
+        // encoder.write(&(buffer.len() as u32).to_be_bytes()).unwrap();
+        // encoder.write_all(buffer).unwrap();
+        // let encoded = encoder.finish().unwrap();
+        // let mut compressed: Vec<u8> = Vec::new();
+        // if !encoded.1.is_none() {
+        //     compressed = encoded.0;
+        // } else {
+        //     panic!("Failed to compress world");
+        // }
         Self {
             format_version: 1,
             name: name.to_string(),
@@ -339,7 +339,7 @@ impl ClassicWorld {
                 p: 0
             },
             blocks: buffer.to_vec(),
-            gzipped: compressed,
+            // gzipped: compressed,
         }
     }
 
