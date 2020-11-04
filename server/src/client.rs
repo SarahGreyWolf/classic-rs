@@ -328,8 +328,8 @@ impl Client {
                 match self.socket.write_all(&packet_buffer[0..buffer_filled]).await {
                     Ok(_) => {}
                     Err(e) => {
-                        if e.kind() == ErrorKind::ConnectionAborted {
-
+                        if e.kind() == ErrorKind::ConnectionAborted || e.kind() == ErrorKind::ConnectionReset {
+                            break;
                         } else {
                             panic!("Error: {:?}", e);
                         }
@@ -351,7 +351,7 @@ impl Client {
         match self.socket.write_all(&packet_buffer[0..buffer_filled]).await {
             Ok(_) => {}
             Err(e) => {
-                if e.kind() == ErrorKind::ConnectionAborted {
+                if e.kind() == ErrorKind::ConnectionAborted || e.kind() == ErrorKind::ConnectionReset {
 
                 } else {
                     panic!("Error: {:?}", e);
