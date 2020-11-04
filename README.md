@@ -28,7 +28,6 @@ Aimed at supporting the project [Mineonline](http://mineonline.codie.gg/).
         - [X] Despawn Player
         - [X] Message
         - [X] Disconnect Player
-        - [ ] Update User Type
 - [ ] World
     - [ ] [ClassicWorld Format](https://wiki.vg/ClassicWorld_file_format)
         - [ ] Loading
