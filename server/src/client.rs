@@ -69,7 +69,7 @@ impl Client {
             self.get_username_as_bytes(),
             self.current_x,
             self.current_y,
-            self.current_y,
+            self.current_z,
             self.current_yaw,
             self.current_pitch
         )
@@ -170,8 +170,8 @@ impl Client {
                             self.current_x,
                             self.current_y,
                             self.current_z,
-                            0,
-                            0,
+                            self.current_yaw,
+                            self.current_pitch,
                         ));
                     }
                 }
