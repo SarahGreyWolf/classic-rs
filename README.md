@@ -20,12 +20,12 @@ Aimed at supporting the project [Mineonline](http://mineonline.codie.gg/).
         - [X] Level Data Chunk
         - [X] Level Finalize
         - [X] Set Block
-        - [ ] Spawn Player (Spawns new player for others but not others for new player)
+        - [X] Spawn Player
         - [X] Player Teleport
         - [X] Position and Orientation Update
         - [X] Position Update
         - [X] Orientation Update
-        - [ ] Despawn Player
+        - [X] Despawn Player
         - [X] Message
         - [X] Disconnect Player
         - [ ] Update User Type
