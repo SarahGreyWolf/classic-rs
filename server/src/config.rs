@@ -39,6 +39,7 @@ impl Default for Mojang {
 
 #[derive(Serialize, Deserialize)]
 pub struct Heartbeat {
+    pub enabled: bool,
     pub mineonline: MineOnline,
     pub mojang: Mojang
 }
@@ -46,6 +47,7 @@ pub struct Heartbeat {
 impl Default for Heartbeat {
     fn default() -> Self {
         Self {
+            enabled: true,
             mineonline: MineOnline::default(),
             mojang: Mojang::default()
         }

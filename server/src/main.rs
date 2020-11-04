@@ -75,19 +75,22 @@ impl Server {
             &salt,
             7
         )));
-        // #[cfg(feature = "mineonline_api")]
-        if config.heartbeat.mineonline.active {
-            let mut mo_beat = mo_heartbeat.lock().await;
-            mo_beat.build_request();
-            mo_beat.beat().await;
-            drop(mo_beat);
-        }
-        // #[cfg(feature = "mojang_api")]
-        if config.heartbeat.mojang.active {
-            let mut m_beat = m_heartbeat.lock().await;
-            m_beat.build_request();
-            m_beat.beat().await;
-            drop(m_beat);
+
+        if config.heartbeat.enabled {
+            // #[cfg(feature = "mineonline_api")]
+            if config.heartbeat.mineonline.active {
+                let mut mo_beat = mo_heartbeat.lock().await;
+                mo_beat.build_request();
+                mo_beat.beat().await;
+                drop(mo_beat);
+            }
+            // #[cfg(feature = "mojang_api")]
+            if config.heartbeat.mojang.active {
+                let mut m_beat = m_heartbeat.lock().await;
+                m_beat.build_request();
+                m_beat.beat().await;
+                drop(m_beat);
+            }
         }
 
         let (tx, rx) = flume::unbounded::<Client>();
@@ -118,13 +121,15 @@ impl Server {
             r.store(false, Ordering::SeqCst);
         });
 
-        let r = running.clone();
-        let mo_beat = mo_heartbeat.clone();
-        let m_beat = m_heartbeat.clone();
         let beatdate = Arc::new(AtomicBool::new(false));
-        let bd = beatdate.clone();
+        if config.heartbeat.enabled {
+            let r = running.clone();
+            let mo_beat = mo_heartbeat.clone();
+            let m_beat = m_heartbeat.clone();
+            let bd = beatdate.clone();
 
-        Server::spawn_heartbeats(r, mo_beat, m_beat, bd).await;
+            Server::spawn_heartbeats(r, mo_beat, m_beat, bd).await;
+        }
 
         Self {
             protocol: 7,
@@ -176,11 +181,13 @@ impl Server {
         self.world.lock().await.save_crs_file().await;
         info!("Saving took {:?}", Instant::now().duration_since(start_save));
 
-        // #[cfg(feature = "mineonline_api")]
-        let mo_beat = &self.mo_heartbeat.lock().await;
-        mineonline_api::heartbeat::Heartbeat::delete(&mo_beat.get_url(),
-                                                     &mo_beat.get_uuid()).await
-            .expect("Failed to send delete request");
+        if self.config.heartbeat.enabled {
+            // #[cfg(feature = "mineonline_api")]
+            let mo_beat = &self.mo_heartbeat.lock().await;
+            mineonline_api::heartbeat::Heartbeat::delete(&mo_beat.get_url(),
+                                                         &mo_beat.get_uuid()).await
+                .expect("Failed to send delete request");
+        }
 
         Ok(())
     }
@@ -214,7 +221,7 @@ impl Server {
             }
         }
 
-        let mut clients = &mut self.clients;
+        let clients = &mut self.clients;
 
         for c_pos in 0..clients.len() {
             let client = &mut clients[c_pos];
@@ -257,15 +264,16 @@ impl Server {
         for id in player_cleanup {
             self.clients.remove(id);
         }
-
-        if self.config.heartbeat.mineonline.active {
-            let mut mo_beat = self.mo_heartbeat.lock().await;
-            mo_beat.update_player_names(&self.usernames);
-            mo_beat.update_users(self.clients.len() as u16);
-        }
-        if self.config.heartbeat.mojang.active {
-            let mut m_beat = self.m_heartbeat.lock().await;
-            m_beat.update_users(self.clients.len() as u16);
+        if self.config.heartbeat.enabled {
+            if self.config.heartbeat.mineonline.active {
+                let mut mo_beat = self.mo_heartbeat.lock().await;
+                mo_beat.update_player_names(&self.usernames);
+                mo_beat.update_users(self.clients.len() as u16);
+            }
+            if self.config.heartbeat.mojang.active {
+                let mut m_beat = self.m_heartbeat.lock().await;
+                m_beat.update_users(self.clients.len() as u16);
+            }
         }
 
         player_cleanup = vec![];
