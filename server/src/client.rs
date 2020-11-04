@@ -27,7 +27,6 @@ pub struct Client {
     // The rank of the user, 0x64 for op, 0x00 for normal
     user_type: u8,
     logged_in: bool,
-    fresh_spawned: bool,
     socket: TcpStream,
     n_tx: Sender<(u8, Vec<ClientBound>)>,
     current_x: i16,
@@ -375,7 +374,7 @@ impl Client {
 fn encode_string(string: &str) -> [u8; 64] {
     let mut string_bytes: [u8; 64] = [0x20; 64];
     for i in 0..string.len() {
-        if i > string_bytes.len() {
+        if i >= string_bytes.len() {
             break;
         }
         string_bytes[i] = string.as_bytes()[i];
