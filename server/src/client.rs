@@ -27,6 +27,7 @@ pub struct Client {
     // The rank of the user, 0x64 for op, 0x00 for normal
     user_type: u8,
     logged_in: bool,
+    fresh_spawned: bool,
     socket: TcpStream,
     n_tx: Sender<(u8, Vec<ClientBound>)>,
     current_x: i16,
@@ -138,22 +139,22 @@ impl Client {
                             ClientBound::LevelFinalize(size[0], size[1], size[2]),
                             ClientBound::PlayerTeleport(
                                 255,
-                                ((size[0] / 2) * 32) as i16,
-                                (((size[1] / 2) + 3) * 32) as i16,
-                                ((size[2] / 2) * 32) as i16,
+                                (((size[0] / 2) * 32) + 16) as i16,
+                                (((size[1] / 2) + 2) * 32) as i16,
+                                (((size[2] / 2) * 32) + 16) as i16,
                                 0,
                                 0,
                             )
                         ]).await;
-                        self.current_x = ((size[0] / 2) * 32) as i16;
-                        self.current_y = (((size[1] / 2) + 3) * 32) as i16;
-                        self.current_z = ((size[2] / 2) * 32) as i16;
+                        self.current_x = (((size[0] / 2) * 32) + 16) as i16;
+                        self.current_y = (((size[1] / 2) + 2) * 32) as i16;
+                        self.current_z = (((size[2] / 2) * 32) + 16) as i16;
                         echo_packets.push(ClientBound::SpawnPlayer(
                             255,
                             self.get_username_as_bytes(),
-                            ((size[0] / 2) * 32) as i16,
-                            (((size[1] / 2) + 3) * 32) as i16,
-                            ((size[2] / 2) * 32) as i16,
+                            self.current_x,
+                            self.current_y,
+                            self.current_z,
                             0,
                             0,
                         ));
@@ -166,9 +167,9 @@ impl Client {
                         clientbound_packets.push(ClientBound::SpawnPlayer(
                             self.id,
                             self.get_username_as_bytes(),
-                            5 * 32,
-                            8 * 32,
-                            5 * 32,
+                            self.current_x,
+                            self.current_y,
+                            self.current_z,
                             0,
                             0,
                         ));
@@ -190,9 +191,9 @@ impl Client {
                         clientbound_packets.push(
                             ClientBound::PositionAndOrientationUpdate(
                                 self.id,
-                                (self.current_x - x) as i8,
-                                (self.current_y - y) as i8,
-                                (self.current_z - z) as i8,
+                                -(self.current_x - x) as i8,
+                                -(self.current_y - y) as i8,
+                                -(self.current_z - z) as i8,
                                 yaw,
                                 pitch
                             )
@@ -201,9 +202,9 @@ impl Client {
                         clientbound_packets.push(
                             ClientBound::PositionUpdate(
                                 self.id,
-                                (self.current_x - x) as i8,
-                                (self.current_y - y) as i8,
-                                (self.current_z - z) as i8,
+                                -(self.current_x - x) as i8,
+                                -(self.current_y - y) as i8,
+                                -(self.current_z - z) as i8,
                             )
                         );
                     } else if ori_changed {
@@ -221,6 +222,26 @@ impl Client {
                     self.current_z = z;
                     self.current_yaw = yaw;
                     self.current_pitch = pitch;
+                }
+                ServerBound::SetBlock(x, y, z, mode, block) => {
+                    let block = Block::from(block).clone();
+                    if mode == 0x00 {
+                        world_lock.set_block(x as usize, y as usize, z as usize, Block::Air.into());
+                        echo_packets.push(
+                            ClientBound::SetBlock(x, y, z, Block::Air.into())
+                        );
+                        clientbound_packets.push(
+                            ClientBound::SetBlock(x, y, z, Block::Air.into())
+                        );
+                    } else {
+                        world_lock.set_block(x as usize, y as usize, z as usize, block.into());
+                        echo_packets.push(
+                            ClientBound::SetBlock(x, y, z, block.into())
+                        );
+                        clientbound_packets.push(
+                            ClientBound::SetBlock(x, y, z, block.into())
+                        );
+                    }
                 }
                 ServerBound::Message(_, message) => {
                     let mut f_msg: String = "".to_owned();
