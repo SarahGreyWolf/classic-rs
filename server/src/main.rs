@@ -199,6 +199,7 @@ impl Server {
     async fn update_network(&mut self) {
         let mut packet_buffer: Vec<(u8, Vec<ClientBound>)> = vec![(0, Vec::new())];
         let mut player_cleanup: Vec<usize> = vec![];
+        let mut fresh_clients: Vec<(u8, usize)> = vec![];
         loop {
             match self.client_rx.try_recv() {
                 Ok(client) => {
@@ -221,11 +222,12 @@ impl Server {
             }
         }
 
-        let clients = &mut self.clients;
+        let mut clients = &mut self.clients;
 
         for c_pos in 0..clients.len() {
             let client = &mut clients[c_pos];
             if client.username != "" && !self.usernames.contains(&client.username) {
+                fresh_clients.push((client.get_id(), c_pos));
                 self.usernames.push(client.username.clone());
                 self.beatdate.store(true, Ordering::SeqCst);
             }
@@ -261,6 +263,19 @@ impl Server {
             }
         }
 
+        if fresh_clients.len() > 0 {
+            for f_client in &fresh_clients {
+                let mut packets: Vec<ClientBound> = vec![];
+                for c in &mut self.clients {
+                    if c.get_id() != f_client.0 {
+                        packets.push(c.spawn_self().await);
+                    }
+                }
+                let c = &mut self.clients[f_client.1];
+                c.write_packets(&packets).await;
+            }
+        }
+
         for id in player_cleanup {
             self.clients.remove(id);
         }
@@ -277,6 +292,7 @@ impl Server {
         }
 
         player_cleanup = vec![];
+        fresh_clients = vec![];
     }
 
     async fn listen(mut listener: TcpListener, tx: Sender<Client>, n_tx: Sender<(u8, Vec<ClientBound>)>)
