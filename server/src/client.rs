@@ -74,6 +74,17 @@ impl Client {
         )
     }
 
+    pub fn despawn_self(&self) -> [ClientBound; 2] {
+        info!("{} has left the server", self.username);
+        [
+            ClientBound::DespawnPlayer(self.id),
+            ClientBound::Message(255, {
+                let msg = format!("{} left the Server", self.username);
+                encode_string(&msg)
+            })
+        ]
+    }
+
     pub async fn handle_connect(&mut self, salt: &str, world: Arc<Mutex<ClassicWorld>>) -> Result<(), tokio::io::Error> {
         let mut world_lock = world.lock().await;
         let mut receive_buffer = [0x00; 1460];
@@ -163,33 +174,14 @@ impl Client {
                         ));
                     }
                 }
-                ServerBound::SetBlock(x, y, z, mode, block) => {
-                    let block = Block::from(block).clone();
-                    if mode == 0x00 {
-                        world_lock.set_block(x as usize, y as usize, z as usize, Block::Air.into());
-                        echo_packets.push(
-                            ClientBound::SetBlock(x, y, z, Block::Air.into())
-                        );
-                        clientbound_packets.push(
-                            ClientBound::SetBlock(x, y, z, Block::Air.into())
-                        );
-                    } else {
-                        world_lock.set_block(x as usize, y as usize, z as usize, block.into());
-                        echo_packets.push(
-                            ClientBound::SetBlock(x, y, z, block.into())
-                        );
-                        clientbound_packets.push(
-                            ClientBound::SetBlock(x, y, z, block.into())
-                        );
-                    }
-                }
                 ServerBound::PositionAndOrientation(
                     p_id, x, y, z, yaw, pitch) => {
                     let mut pos_changed: bool = false;
                     let mut ori_changed: bool = false;
-                    let y = y - 1;
+                    let y = y + 3;
                     if x != self.current_x || y != self.current_y || z != self.current_z {
                         pos_changed = true;
+                        // debug!("{:#}:{:#}:{:#}", self.current_x - x, self.current_y - y, self.current_z - z);
                     }
                     if yaw != self.current_yaw || pitch != self.current_pitch {
                         ori_changed = true;

@@ -234,10 +234,10 @@ impl Server {
                 Ok(_) => {},
                 Err(e) => {
                     if e.kind() == tokio::io::ErrorKind::ConnectionReset {
-                        info!("{} has left the server", client.username);
+                        self.network_tx.send((client.get_id(), client.despawn_self().to_vec())).unwrap();
                         closed = true;
                     } else if e.kind() == tokio::io::ErrorKind::ConnectionAborted {
-                        info!("{} has left the server", client.username);
+                        self.network_tx.send((client.get_id(), client.despawn_self().to_vec())).unwrap();
                         closed = true;
                     } else {
                         panic!("{}", e);
