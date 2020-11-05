@@ -187,25 +187,56 @@ impl Client {
                         ori_changed = true;
                     }
                     if pos_changed && ori_changed {
-                        clientbound_packets.push(
-                            ClientBound::PositionAndOrientationUpdate(
-                                self.id,
-                                -(self.current_x - x) as i8,
-                                -(self.current_y - y) as i8,
-                                -(self.current_z - z) as i8,
-                                yaw,
-                                pitch
+                        if  -8 < (self.current_x - x) && (self.current_x - x) > 8 ||
+                            -8 < (self.current_y - y) && (self.current_y - y) > 8 ||
+                            -8 < (self.current_z - z) && (self.current_z - z) > 8 {
+                            clientbound_packets.push(
+                                ClientBound::PositionAndOrientationUpdate(
+                                    self.id,
+                                    -(self.current_x - x) as i8,
+                                    -(self.current_y - y) as i8,
+                                    -(self.current_z - z) as i8,
+                                    yaw,
+                                    pitch
+                                )
+                            );
+                        } else {
+                            clientbound_packets.push(
+                                ClientBound::PlayerTeleport(
+                                    self.id,
+                                    x,
+                                    y,
+                                    z,
+                                    yaw,
+                                    pitch
+                                )
                             )
-                        );
+                        }
                     } else if pos_changed {
-                        clientbound_packets.push(
-                            ClientBound::PositionUpdate(
-                                self.id,
-                                -(self.current_x - x) as i8,
-                                -(self.current_y - y) as i8,
-                                -(self.current_z - z) as i8,
+                        if  -8 < (self.current_x - x) && (self.current_x - x) > 8 ||
+                            -8 < (self.current_y - y) && (self.current_y - y) > 8 ||
+                            -8 < (self.current_z - z) && (self.current_z - z) > 8 {
+                            clientbound_packets.push(
+                                ClientBound::PositionUpdate(
+                                    self.id,
+                                    -(self.current_x - x) as i8,
+                                    -(self.current_y - y) as i8,
+                                    -(self.current_z - z) as i8,
+                                )
+                            );
+                        } else {
+                            clientbound_packets.push(
+                                ClientBound::PlayerTeleport(
+                                    self.id,
+                                    x,
+                                    y,
+                                    z,
+                                    yaw,
+                                    pitch
+                                )
                             )
-                        );
+                        }
+
                     } else if ori_changed {
                         clientbound_packets.push(
                             ClientBound::OrientationUpdate(

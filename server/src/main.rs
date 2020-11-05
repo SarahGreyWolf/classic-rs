@@ -162,7 +162,7 @@ impl Server {
 
 
             end = Instant::now();
-            if duration.as_millis() > 1000 {
+            if duration.as_millis() > 250 {
                 warn!("Last tick took {:#}ms", duration.as_millis());
             }
         }
@@ -249,11 +249,14 @@ impl Server {
             for i in 0..packet_buffer.len() {
                 let packets = &packet_buffer[i];
                 if packets.0 != client.get_id() {
-                    client.write_packets(&packets.1).await;
+                    client.write_packets(packets.1.clone()).await;
                 }
             }
             if closed {
                 for i in 0..self.usernames.len() {
+                    if i >= self.usernames.len() {
+                        break;
+                    }
                     if self.usernames[i] == client.username {
                         self.usernames.remove(i);
                     }
@@ -272,7 +275,7 @@ impl Server {
                     }
                 }
                 let c = &mut self.clients[f_client.1];
-                c.write_packets(&packets).await;
+                c.write_packets(packets).await;
             }
         }
 
@@ -290,9 +293,6 @@ impl Server {
                 m_beat.update_users(self.clients.len() as u16);
             }
         }
-
-        player_cleanup = vec![];
-        fresh_clients = vec![];
     }
 
     async fn listen(mut listener: TcpListener, tx: Sender<Client>, n_tx: Sender<(u8, Vec<ClientBound>)>)
