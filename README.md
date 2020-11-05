@@ -5,15 +5,15 @@ Aimed at supporting the project [Mineonline](http://mineonline.codie.gg/).
 ![Image of Classic.RS written in game in Trans Colours](https://github.com/Master0r0/classic-mc-rs/raw/dev/screenshots/splash.png)
 
 ## Current Implemented
-- [x] Mojang Heartbeat
-- [x] Mineonline Heartbeat
-- [ ] Packets
+- [X] Mojang Heartbeat
+- [X] Mineonline Heartbeat
+- [X] Packets
     - [X] ServerBound Packets
         - [X] Player Ident
         - [X] Set Block
         - [X] Position & Orientation
         - [X] Message
-    - [ ] ClientBound Packets
+    - [X] ClientBound Packets
         - [X] Server Ident
         - [X] Ping
         - [X] Level Initialize
