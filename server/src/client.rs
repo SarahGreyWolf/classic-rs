@@ -283,12 +283,10 @@ impl Client {
                             f_msg.push_str(&format!("{}", split[i]));
                         }
                     }
-
-                    let msg = format!("{}: {}", self.username, f_msg);
-                    info!("{}", msg);
-                    let message = encode_string(&msg);
-                    echo_packets.push(ClientBound::Message(self.id, message));
-                    clientbound_packets.push(ClientBound::Message(self.id, message));
+                    let mut msg = self.send_message(
+                        self.username.as_str(), self.id, f_msg.as_str()).await;
+                    echo_packets.append(&mut msg);
+                    clientbound_packets.append(&mut msg);
                 }
                 ServerBound::UnknownPacket => {
                     let msg = String::from_utf8(receive_buffer.to_vec())
@@ -310,6 +308,42 @@ impl Client {
         })]).await;
 
         Ok(())
+    }
+
+    pub async fn send_message(&self, sender_name: &str, sender_id: u8, msg: &str) -> Vec<ClientBound> {
+        let mut messages: Vec<ClientBound> = vec![];
+        let split_msg = msg.split_ascii_whitespace();
+        if split_msg.clone().count() > 1 {
+            let mut split_indx = 0;
+            let mut char_count: usize = 0;
+            let msg_full: String = split_msg.map(|word|
+                if char_count + word.len() < (64 - (sender_name.len() + 4)) {
+                    split_indx += 1;
+                    char_count += word.len() + 1;
+                    format!("{} ", word)
+                } else { "".to_string() }
+            ).collect();
+            let first_msg = format!("<{}>: {}", sender_name, msg_full);
+            info!("{}", first_msg);
+            messages.push(ClientBound::Message(sender_id, encode_string(&first_msg)));
+            while char_count < msg.len() {
+                let mut fresh_char_count = 0;
+                let split_msg = msg.split_at(char_count).1.split_ascii_whitespace();
+                let msg_full: String = split_msg.map(|word|
+                    if fresh_char_count + word.len() < 64 {
+                        fresh_char_count += word.len() + 1;
+                        char_count += word.len() + 1;
+                        format!("{} ", word)
+                    } else { "".to_string() }
+                ).collect();
+                let msg = format!("{}", msg_full);
+                info!("{}", msg);
+                messages.push(ClientBound::Message(sender_id, encode_string(&msg)));
+            }
+        }else {
+            messages.push(ClientBound::Message(sender_id, encode_string(msg)));
+        }
+        messages
     }
 
     async fn send_blocks(&mut self, world: &mut ClassicWorld) -> Result<(), tokio::io::Error> {
