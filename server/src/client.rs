@@ -27,13 +27,14 @@ pub struct Client {
     // The rank of the user, 0x64 for op, 0x00 for normal
     user_type: u8,
     logged_in: bool,
-    socket: TcpStream,
+    socket: Arc<Mutex<TcpStream>>,
     n_tx: Sender<(u8, Vec<ClientBound>)>,
     current_x: i16,
     current_y: i16,
     current_z: i16,
     current_yaw: u8,
     current_pitch: u8,
+    flying: bool,
 }
 
 impl Client {
@@ -44,13 +45,14 @@ impl Client {
             id,
             user_type: 0x00,
             logged_in: false,
-            socket: sock,
+            socket: Arc::new(Mutex::new(sock)),
             n_tx,
             current_x: 0,
             current_y: 0,
             current_z: 0,
             current_yaw: 0,
             current_pitch: 0,
+            flying: false,
         }
     }
 
@@ -86,9 +88,10 @@ impl Client {
     }
 
     pub async fn handle_connect(&mut self, salt: &str, world: Arc<Mutex<ClassicWorld>>) -> Result<(), tokio::io::Error> {
-        let mut world_lock = world.lock().await;
         let mut receive_buffer = [0x00; 1460];
-        self.socket.read(&mut receive_buffer).await?;
+        let mut socket = self.socket.lock().await;
+        socket.read(&mut receive_buffer).await?;
+        drop(socket);
 
         let mut serverbound_packets: Vec<ServerBound> = Vec::new();
         let mut clientbound_packets: Vec<ClientBound> = Vec::new();
@@ -120,13 +123,14 @@ impl Client {
                 ServerBound::PlayerIdentification(protocol, username,
                                                   ver_key, _) => {
                     if protocol != 0 {
+                        let mut world_lock = world.lock().await;
                         self.username = username;
                         // debug!("{}", ver_key);
                         let config = Config::get();
                         if config.server.online_mode {
                             
                         }
-                        self.write_packets(&vec![ClientBound::ServerIdentification(
+                        self.write_packets(vec![ClientBound::ServerIdentification(
                             7,
                             encode_string(&config.server.name),
                             encode_string(&config.server.motd),
@@ -134,7 +138,7 @@ impl Client {
                         ), ClientBound::LevelInitialize]).await;
                         self.send_blocks(world_lock.deref_mut()).await.expect("Failed to send blocks");
                         let size = world_lock.get_size();
-                        self.write_packets(&vec![
+                        self.write_packets(vec![
                             ClientBound::LevelFinalize(size[0], size[1], size[2]),
                             ClientBound::PlayerTeleport(
                                 255,
@@ -172,6 +176,7 @@ impl Client {
                             self.current_yaw,
                             self.current_pitch,
                         ));
+                        drop(world_lock);
                     }
                 }
                 ServerBound::PositionAndOrientation(
@@ -254,6 +259,7 @@ impl Client {
                     self.current_pitch = pitch;
                 }
                 ServerBound::SetBlock(x, y, z, mode, block) => {
+                    let mut world_lock = world.lock().await;
                     let block = Block::from(block).clone();
                     if mode == 0x00 {
                         world_lock.set_block(x as usize, y as usize, z as usize, Block::Air.into());
@@ -272,6 +278,7 @@ impl Client {
                             ClientBound::SetBlock(x, y, z, block.into())
                         );
                     }
+                    drop(world_lock);
                 }
                 ServerBound::Message(_, message) => {
                     let mut f_msg: String = "".to_owned();
@@ -297,13 +304,13 @@ impl Client {
         }
         echo_packets.push(ClientBound::Ping);
 
-        self.write_packets(&echo_packets).await;
+        self.write_packets(echo_packets).await;
         self.n_tx.send((self.id, clientbound_packets)).expect("Failed to send Packets");
         Ok(())
     }
 
     pub async fn disconnect(&mut self, msg: &str) -> Result<(), tokio::io::Error> {
-        self.write_packets(&vec![ClientBound::DisconnectPlayer({
+        self.write_packets(vec![ClientBound::DisconnectPlayer({
             encode_string(msg)
         })]).await;
 
@@ -367,61 +374,64 @@ impl Client {
                                                                ((sent / compressed.len()) * 100) as u8);
                 sent += 1024;
                 left -= 1024;
-                self.write_packets(&vec![world_packet]).await;
+                self.write_packets(vec![world_packet]).await;
             }else {
                 // let world_packet = ClientBound::LevelDataChunk(left as i16, send_buffer, progress);
                 sent += left;
                 left = 0;
                 let world_packet = ClientBound::LevelDataChunk(1024, send_buffer,
                                                                ((sent / compressed.len()) * 100) as u8);
-                self.write_packets(&vec![world_packet]).await;
+                self.write_packets(vec![world_packet]).await;
             }
         }
 
         Ok(())
     }
 
-    pub async fn write_packets(&mut self, packets: &Vec<ClientBound>) {
-        let mut packet_buffer: [u8; 1460] = [0u8; 1460];
-        let mut buffer_filled: usize = 0;
-
-        for p in 0..packets.len() {
-            let c_packet = Packet::into(&packets[p]);
-            let c_slice = c_packet.as_slice();
-            if c_slice.len() > (1460 - buffer_filled) {
-                match self.socket.write_all(&packet_buffer[0..buffer_filled]).await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        if e.kind() == ErrorKind::ConnectionAborted || e.kind() == ErrorKind::ConnectionReset {
-                            break;
-                        } else {
-                            panic!("Error: {:?}", e);
+    pub async fn write_packets(&mut self, packets: Vec<ClientBound>) {
+        let socket = self.socket.clone();
+            let mut socket = socket.lock().await;
+            let mut packet_buffer: [u8; 1460] = [0u8; 1460];
+            let mut buffer_filled: usize = 0;
+            for p in 0..packets.len() {
+                let c_packet = Packet::into(&packets[p]);
+                let c_slice = c_packet.as_slice();
+                if c_slice.len() > (1460 - buffer_filled) {
+                    match socket.write_all(&packet_buffer[0..buffer_filled]).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            if e.kind() == ErrorKind::ConnectionAborted || e.kind() == ErrorKind::ConnectionReset {
+                                break;
+                            } else {
+                                panic!("Error: {:?}", e);
+                            }
                         }
                     }
+                    buffer_filled = 0;
+                    packet_buffer = [0u8; 1460];
                 }
-                buffer_filled = 0;
-                packet_buffer = [0u8; 1460];
+                let mut s_index = 0;
+                for i in buffer_filled..1460 {
+                    if s_index < c_slice.len() {
+                        packet_buffer[i] = c_slice[s_index];
+                        s_index += 1;
+                    } else {break;}
+                }
+                buffer_filled += c_slice.len();
             }
-            let mut s_index = 0;
-            for i in buffer_filled..1460 {
-                if s_index < c_slice.len() {
-                    packet_buffer[i] = c_slice[s_index];
-                    s_index += 1;
-                } else {break;}
-            }
-            buffer_filled += c_slice.len();
-        }
 
-        match self.socket.write_all(&packet_buffer[0..buffer_filled]).await {
-            Ok(_) => {}
-            Err(e) => {
-                if e.kind() == ErrorKind::ConnectionAborted || e.kind() == ErrorKind::ConnectionReset {
+            match socket.write_all(&packet_buffer[0..buffer_filled]).await {
+                Ok(_) => {}
+                Err(e) => {
+                    if e.kind() == ErrorKind::ConnectionAborted || e.kind() == ErrorKind::ConnectionReset {
 
-                } else {
-                    panic!("Error: {:?}", e);
+                    } else {
+                        panic!("Error: {:?}", e);
+                    }
                 }
             }
-        }
+
+
     }
 
     fn get_username_as_bytes(&self) -> [u8; 64] {
