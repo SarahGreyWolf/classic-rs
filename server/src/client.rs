@@ -27,7 +27,7 @@ pub struct Client {
     // The rank of the user, 0x64 for op, 0x00 for normal
     user_type: u8,
     logged_in: bool,
-    socket: Arc<Mutex<TcpStream>>,
+    socket: TcpStream,
     n_tx: Sender<(u8, Vec<ClientBound>)>,
     current_x: i16,
     current_y: i16,
@@ -45,7 +45,7 @@ impl Client {
             id,
             user_type: 0x00,
             logged_in: false,
-            socket: Arc::new(Mutex::new(sock)),
+            socket: sock,
             n_tx,
             current_x: 0,
             current_y: 0,
@@ -89,9 +89,7 @@ impl Client {
 
     pub async fn handle_connect(&mut self, salt: &str, world: Arc<Mutex<ClassicWorld>>) -> Result<(), tokio::io::Error> {
         let mut receive_buffer = [0x00; 1460];
-        let mut socket = self.socket.lock().await;
-        socket.read(&mut receive_buffer).await?;
-        drop(socket);
+        self.socket.read(&mut receive_buffer).await?;
 
         let mut serverbound_packets: Vec<ServerBound> = Vec::new();
         let mut clientbound_packets: Vec<ClientBound> = Vec::new();
@@ -389,49 +387,43 @@ impl Client {
     }
 
     pub async fn write_packets(&mut self, packets: Vec<ClientBound>) {
-        let socket = self.socket.clone();
-            let mut socket = socket.lock().await;
-            let mut packet_buffer: [u8; 1460] = [0u8; 1460];
-            let mut buffer_filled: usize = 0;
-            for p in 0..packets.len() {
-                let c_packet = Packet::into(&packets[p]);
-                let c_slice = c_packet.as_slice();
-                if c_slice.len() > (1460 - buffer_filled) {
-                    match socket.write_all(&packet_buffer[0..buffer_filled]).await {
-                        Ok(_) => {}
-                        Err(e) => {
-                            if e.kind() == ErrorKind::ConnectionAborted || e.kind() == ErrorKind::ConnectionReset {
-                                break;
-                            } else {
-                                panic!("Error: {:?}", e);
-                            }
+        let mut packet_buffer: [u8; 1460] = [0u8; 1460];
+        let mut buffer_filled: usize = 0;
+        for p in 0..packets.len() {
+            let c_packet = Packet::into(&packets[p]);
+            let c_slice = c_packet.as_slice();
+            if c_slice.len() > (1460 - buffer_filled) {
+                match self.socket.write_all(&packet_buffer[0..buffer_filled]).await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        if e.kind() == ErrorKind::ConnectionAborted || e.kind() == ErrorKind::ConnectionReset {
+                            break;
+                        } else {
+                            panic!("Error: {:?}", e);
                         }
                     }
-                    buffer_filled = 0;
-                    packet_buffer = [0u8; 1460];
                 }
-                let mut s_index = 0;
-                for i in buffer_filled..1460 {
-                    if s_index < c_slice.len() {
-                        packet_buffer[i] = c_slice[s_index];
-                        s_index += 1;
-                    } else {break;}
-                }
-                buffer_filled += c_slice.len();
+                buffer_filled = 0;
+                packet_buffer = [0u8; 1460];
             }
+            let mut s_index = 0;
+            for i in buffer_filled..1460 {
+                if s_index < c_slice.len() {
+                    packet_buffer[i] = c_slice[s_index];
+                    s_index += 1;
+                } else { break; }
+            }
+            buffer_filled += c_slice.len();
+        }
 
-            match socket.write_all(&packet_buffer[0..buffer_filled]).await {
-                Ok(_) => {}
-                Err(e) => {
-                    if e.kind() == ErrorKind::ConnectionAborted || e.kind() == ErrorKind::ConnectionReset {
-
-                    } else {
-                        panic!("Error: {:?}", e);
-                    }
+        match self.socket.write_all(&packet_buffer[0..buffer_filled]).await {
+            Ok(_) => {}
+            Err(e) => {
+                if e.kind() == ErrorKind::ConnectionAborted || e.kind() == ErrorKind::ConnectionReset {} else {
+                    panic!("Error: {:?}", e);
                 }
             }
-
-
+        }
     }
 
     fn get_username_as_bytes(&self) -> [u8; 64] {
