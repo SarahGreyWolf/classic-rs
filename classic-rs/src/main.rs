@@ -199,27 +199,27 @@ impl Server {
         let mut packet_buffer: Vec<(u8, Vec<ClientBound>)> = vec![(0, Vec::new())];
         let mut player_cleanup: Vec<usize> = vec![];
         let mut fresh_clients: Vec<(u8, usize)> = vec![];
-        // loop {
-        //     match self.client_rx.try_recv() {
-        //         Ok(client) => {
-        //             self.clients.push(client);
-        //             self.beatdate.store(true, Ordering::SeqCst);
-        //         },
-        //         Err(flume::TryRecvError::Empty) => break,
-        //         Err(flume::TryRecvError::Disconnected) => {
-        //             break;
-        //         }
-        //     }
-        // }
-        // loop {
-        //     match self.network_rx.try_recv() {
-        //         Ok(packets) => packet_buffer.push(packets),
-        //         Err(flume::TryRecvError::Empty) => break,
-        //         Err(flume::TryRecvError::Disconnected) => {
-        //             break;
-        //         }
-        //     }
-        // }
+        loop {
+            match self.client_rx.try_recv() {
+                Ok(client) => {
+                    self.clients.push(client);
+                    self.beatdate.store(true, Ordering::SeqCst);
+                },
+                Err(flume::TryRecvError::Empty) => break,
+                Err(flume::TryRecvError::Disconnected) => {
+                    break;
+                }
+            }
+        }
+        loop {
+            match self.network_rx.try_recv() {
+                Ok(packets) => packet_buffer.push(packets),
+                Err(flume::TryRecvError::Empty) => break,
+                Err(flume::TryRecvError::Disconnected) => {
+                    break;
+                }
+            }
+        }
 
         let mut clients = &mut self.clients;
 
