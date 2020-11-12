@@ -117,7 +117,6 @@ impl Server {
 
         tokio::spawn(async move {
             ctrl_c().await.expect("Failed to listen for event");
-
             r.store(false, Ordering::SeqCst);
         });
 
@@ -158,8 +157,6 @@ impl Server {
 
             self.update_network().await;
             self.update_game().await;
-
-
 
             if start.elapsed().as_millis() > 250 {
                 warn!("Last tick took {:?}", start.elapsed());
@@ -281,17 +278,21 @@ impl Server {
         for id in player_cleanup {
             self.clients.remove(id);
         }
-        if self.config.heartbeat.enabled {
-            if self.config.heartbeat.mineonline.active {
-                let mut mo_beat = self.mo_heartbeat.lock().await;
-                mo_beat.update_player_names(&self.usernames);
-                mo_beat.update_users(self.clients.len() as u16);
-            }
-            if self.config.heartbeat.mojang.active {
-                let mut m_beat = self.m_heartbeat.lock().await;
-                m_beat.update_users(self.clients.len() as u16);
+
+        if self.beatdate.load(Ordering::SeqCst) {
+            if self.config.heartbeat.enabled {
+                if self.config.heartbeat.mineonline.active {
+                    let mut mo_beat = self.mo_heartbeat.lock().await;
+                    mo_beat.update_player_names(&self.usernames);
+                    mo_beat.update_users(self.clients.len() as u16);
+                }
+                if self.config.heartbeat.mojang.active {
+                    let mut m_beat = self.m_heartbeat.lock().await;
+                    m_beat.update_users(self.clients.len() as u16);
+                }
             }
         }
+
     }
 
     async fn listen(mut listener: TcpListener, tx: Sender<Client>, n_tx: Sender<(u8, Vec<ClientBound>)>)
@@ -325,6 +326,8 @@ impl Server {
                         m_heartbeat.beat().await;
                     }
                     beatdate.store(false, Ordering::SeqCst);
+                    drop(mo_heartbeat);
+                    drop(m_heartbeat);
                 }
                 duration = Instant::now();
             }
