@@ -100,13 +100,15 @@ impl Server {
         let (n_tx, n_rx) = flume::unbounded::<(u8, Vec<ClientBound>)>();
         let n_tx_clone = n_tx.clone();
 
+        let running = Arc::new(AtomicBool::new(false));
+        let r = running.clone();
         tokio::spawn(async move {
             let listener = TcpListener::bind(format!("{}:{:#}", local_ip, port)).
                 await.expect("Failed to bind");
+            r.store(true, Ordering::SeqCst);
             Server::listen(listener, tx_clone, n_tx_clone).await.expect("Failed to listen");
         });
 
-        let running = Arc::new(AtomicBool::new(true));
         let r = running.clone();
 
         tokio::spawn(async move {
@@ -143,7 +145,9 @@ impl Server {
     }
 
     async fn run(&mut self) -> Result<(), tokio::io::Error> {
-
+        if !self.running.clone().load(Ordering::SeqCst) {
+            panic!("Failed to bind to port {:#}", self.config.server.port);
+        }
         info!("Server Running at {}:{:#}", self.config.server.ip, self.config.server.port);
         let mut start = Instant::now();
         while self.running.load(Ordering::SeqCst) {

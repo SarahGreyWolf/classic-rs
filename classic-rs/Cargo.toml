@@ -1,6 +1,6 @@
 [package]
 name = "classic-rs"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Master0r0 <m.sarahgreywolf@outlook.com>"]
 edition = "2018"
 
@@ -22,6 +22,7 @@ specs = "0.16.1"
 tokio = {version="0.2.21", features=["full"]}
 backtrace = "0.3.50"
 flate2 = {version="1.0.17", features=["tokio"]}
+md-5 = "0.9.1"
 
 mineonline_api = {path = "../mineonline_api"}
 mojang_api = {path = "../mojang_api"}
