@@ -105,12 +105,6 @@ impl Server {
                 await.expect("Failed to bind");
             Server::listen(listener, tx_clone, n_tx_clone).await.expect("Failed to listen");
         });
-        // let mut ecs_world = ecs::initialise_world();
-        // let mut dispatcher = DispatcherBuilder::new()
-        //     .with(ecs::systems::NetworkReadSys, "net_sys", &[]).build();
-        // dispatcher.setup(&mut world);
-        // dispatcher.dispatch(&mut world);
-        // world.maintain();
 
         let running = Arc::new(AtomicBool::new(true));
         let r = running.clone();
@@ -380,8 +374,6 @@ async fn init_logging() -> Result<(), tokio::io::Error> {
         .unwrap();
     std::panic::set_hook(Box::new(|panic_info| {
         error!("{}", panic_info.to_string());
-        // let backtrace = Backtrace::new();
-        // error!("{}\n{:?}", panic_info.to_string(), backtrace);
     }));
 
     Ok(())

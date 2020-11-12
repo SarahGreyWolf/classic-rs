@@ -96,7 +96,7 @@ pub struct Map {
 impl Default for Map {
     fn default() -> Self {
         Self {
-            name: "".to_string(),
+            name: "world".to_string(),
             creator_username: "".to_string(),
             x_width: 32,
             y_height: 32,
