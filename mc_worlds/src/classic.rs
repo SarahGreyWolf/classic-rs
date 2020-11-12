@@ -15,7 +15,7 @@ use nbt::from_gzip_reader;
 use serde::{Serialize, Deserialize};
 use std::fs::Permissions;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Block {
     Air,
     Stone,
@@ -276,7 +276,7 @@ impl ClassicWorld {
         for i in 0+(x*z)..x * z * (y/2) - 1 {
             blocks[i] = Block::Dirt.into();
         }
-        for i in (x*z) * (y/2)..x * z * (y/2) {
+        for i in x * z * ((y/2) - 1)..x * z * (y/2) {
             blocks[i] = Block::GrassBlock.into();
         }
 

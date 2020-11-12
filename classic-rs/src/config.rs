@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::io::Error;
 use serde_derive::{Deserialize, Serialize};
 use toml::{to_string, from_str};
-use log::{debug};
+use log::{debug, warn};
 
 #[derive(Serialize, Deserialize)]
 pub struct MineOnline {
@@ -32,7 +32,7 @@ impl Default for Mojang {
     fn default() -> Self {
         Self {
             active: false,
-            url: "http://www.minecraft.net/heartbeat.jsp".to_string()
+            url: "https://mineonline.codie.gg/heartbeat.jsp".to_string()
         }
     }
 }
