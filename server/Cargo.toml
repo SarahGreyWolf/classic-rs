@@ -1,5 +1,5 @@
 [package]
-name = "server"
+name = "classic-rs"
 version = "0.1.0"
 authors = ["Master0r0 <m.sarahgreywolf@outlook.com>"]
 edition = "2018"

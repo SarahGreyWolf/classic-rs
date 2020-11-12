@@ -4,7 +4,7 @@ members = [
     "mojang_api",
     "mc_packets",
     "mc_worlds",
-    "server",
+    "classic-rs",
     "grey_mc_api"
 ]
 exclude = []
