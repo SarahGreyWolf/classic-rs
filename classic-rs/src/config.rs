@@ -134,7 +134,7 @@ impl Config {
                 file = f;
             },
             Err(e) => {
-                debug!("Error occurred reading config file: {}", e);
+                warn!("Error occurred reading config file: {}", e);
                 file = Config::create();
             },
         }

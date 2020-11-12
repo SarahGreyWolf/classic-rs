@@ -269,11 +269,14 @@ impl ClassicWorld {
 
         let mut blocks: Vec<u8> =
             (0..(x * y * z)).map(|k| Block::Air.into()).collect();
+        for i in 0..x * z {
+            blocks[i] = Block::Bedrock.into();
+        }
         // TODO: Split this into multiple threads handling multiple chunks at once and combine at the end
-        for i in 0..x * z * (y/2) - 1 {
+        for i in 0+(x*z)..x * z * (y/2) - 1 {
             blocks[i] = Block::Dirt.into();
         }
-        for i in 0 * (y/2)..x * z * (y/2) {
+        for i in (x*z) * (y/2)..x * z * (y/2) {
             blocks[i] = Block::GrassBlock.into();
         }
 

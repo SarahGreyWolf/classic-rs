@@ -261,13 +261,19 @@ impl Client {
                     let mut world_lock = world.lock().await;
                     let block = Block::from(block).clone();
                     if mode == 0x00 {
-                        world_lock.set_block(x as usize, y as usize, z as usize, Block::Air.into());
-                        echo_packets.push(
-                            ClientBound::SetBlock(x, y, z, Block::Air.into())
-                        );
-                        clientbound_packets.push(
-                            ClientBound::SetBlock(x, y, z, Block::Air.into())
-                        );
+                        if block != Block::Bedrock {
+                            world_lock.set_block(x as usize, y as usize, z as usize, Block::Air.into());
+                            echo_packets.push(
+                                ClientBound::SetBlock(x, y, z, Block::Air.into())
+                            );
+                            clientbound_packets.push(
+                                ClientBound::SetBlock(x, y, z, Block::Air.into())
+                            );
+                        } else {
+                            echo_packets.push(
+                                ClientBound::SetBlock(x, y, z, Block::Bedrock.into())
+                            );
+                        }
                     } else {
                         world_lock.set_block(x as usize, y as usize, z as usize, block.into());
                         echo_packets.push(
