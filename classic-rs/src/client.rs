@@ -9,6 +9,7 @@ use flate2::Compression;
 use flate2::write::GzEncoder;
 use std::io::Write;
 use std::cell::{RefMut};
+use md5::{Md5, Digest};
 
 
 
@@ -18,6 +19,7 @@ use mc_packets::classic::{ClientBound, ServerBound};
 use mc_worlds::classic::{ClassicWorld, Block};
 
 use crate::config::Config;
+use md5::digest::Update;
 
 const STRING_LENGTH: usize = 64;
 
@@ -120,14 +122,24 @@ impl Client {
         for packet in serverbound_packets {
             match packet {
                 ServerBound::PlayerIdentification(protocol, username,
-                                                  ver_key, _) => {
+                                                  key, _) => {
                     if protocol != 0 {
                         let mut world_lock = world.lock().await;
                         self.username = username;
-                        // debug!("{}", ver_key);
                         let config = Config::get();
                         if config.server.online_mode {
-                            
+                            let mut hasher = Md5::new();
+                            let mut concat: Vec<u8> = vec![];
+                            concat.append(&mut salt.as_bytes().to_vec());
+                            concat.append(&mut self.username.as_bytes().to_vec());
+                            md5::digest::Update::update(&mut hasher, concat.as_slice());
+                            let hash = hasher.finalize().to_vec();
+                            let hash_string: String = hash.iter().map(|e| format!("{:02x}", e)).collect();
+                            // debug!("{:x?}:{:x?}", key, hash_string);
+                            if key != hash_string {
+                                self.disconnect("You are not logged in to Minecraft").await?;
+                                break;
+                            }
                         }
                         self.write_packets(vec![ClientBound::ServerIdentification(
                             7,
