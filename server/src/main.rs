@@ -10,6 +10,7 @@ use rand::distributions::Alphanumeric;
 use specs::{World, WorldExt, DispatcherBuilder, Builder};
 use std::sync::{Arc};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use mc_packets::Packet;
 use mc_packets::classic::{ClientBound, ServerBound};
@@ -23,7 +24,6 @@ mod ecs;
 use client::Client;
 use config::Config;
 use ecs::components::{common, player, entity};
-use std::sync::atomic::{AtomicBool, Ordering};
 
 struct Server {
     protocol: u8,
@@ -152,18 +152,17 @@ impl Server {
     async fn run(&mut self) -> Result<(), tokio::io::Error> {
 
         info!("Server Running at {}:{:#}", self.config.server.ip, self.config.server.port);
-        let start = Instant::now();
-        let mut end = Instant::now();
+        let mut start = Instant::now();
         while self.running.load(Ordering::SeqCst) {
-            let duration = Instant::now().duration_since(end);
+            start = Instant::now();
 
             self.update_network().await;
             self.update_game().await;
 
 
-            end = Instant::now();
-            if duration.as_millis() > 250 {
-                warn!("Last tick took {:#}ms", duration.as_millis());
+
+            if start.elapsed().as_millis() > 250 {
+                warn!("Last tick took {:?}", start.elapsed());
             }
         }
 
@@ -174,12 +173,12 @@ impl Server {
             self.clients[i].disconnect(&"Server shutting down")
                 .await.expect("Failed to disconnect user");
         }
-        info!("Disconnecting took {:?}", Instant::now().duration_since(start_disconnect));
+        info!("Disconnecting took {:?}", start_disconnect.elapsed());
 
         info!("Saving World...");
         let start_save = Instant::now();
         self.world.lock().await.save_crs_file().await;
-        info!("Saving took {:?}", Instant::now().duration_since(start_save));
+        info!("Saving took {:?}", start_save.elapsed());
 
         if self.config.heartbeat.enabled {
             // #[cfg(feature = "mineonline_api")]
@@ -311,12 +310,10 @@ impl Server {
     async fn spawn_heartbeats(running: Arc<AtomicBool>, mo_heartbeat: Arc<Mutex<mineonline_api::heartbeat::Heartbeat>>,
                               m_heartbeat: Arc<Mutex<mojang_api::heartbeat::Heartbeat>>, beatdate: Arc<AtomicBool>) {
         tokio::spawn(async move {
-            let start = Instant::now();
-            let mut end = Instant::now();
+            let mut duration = Instant::now();
             let config = Config::get();
             while running.load(Ordering::SeqCst) {
-                let duration = end.duration_since(start);
-                if (duration.as_millis() % 40000) == 0 || beatdate.load(Ordering::SeqCst) {
+                if duration.elapsed().as_secs() % 40 == 0 || beatdate.load(Ordering::SeqCst) {
                     let mut mo_heartbeat = mo_heartbeat.lock().await;
                     let mut m_heartbeat = m_heartbeat.lock().await;
                     if config.heartbeat.mineonline.active {
@@ -329,7 +326,7 @@ impl Server {
                     }
                     beatdate.store(false, Ordering::SeqCst);
                 }
-                end = Instant::now();
+                duration = Instant::now();
             }
         });
     }
