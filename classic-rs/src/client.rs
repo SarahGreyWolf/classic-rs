@@ -11,12 +11,13 @@ use std::io::Write;
 use std::cell::{RefMut};
 
 
+
+
 use mc_packets::Packet;
 use mc_packets::classic::{ClientBound, ServerBound};
 use mc_worlds::classic::{ClassicWorld, Block};
 
 use crate::config::Config;
-use std::borrow::BorrowMut;
 
 const STRING_LENGTH: usize = 64;
 
@@ -190,9 +191,9 @@ impl Client {
                         ori_changed = true;
                     }
                     if pos_changed && ori_changed {
-                        if  -8 < (self.current_x - x) && (self.current_x - x) > 8 ||
-                            -8 < (self.current_y - y) && (self.current_y - y) > 8 ||
-                            -8 < (self.current_z - z) && (self.current_z - z) > 8 {
+                        if  -12 < (self.current_x - x) && (self.current_x - x) > 12 ||
+                            -12 < (self.current_y - y) && (self.current_y - y) > 12 ||
+                            -12 < (self.current_z - z) && (self.current_z - z) > 12 {
                             clientbound_packets.push(
                                 ClientBound::PositionAndOrientationUpdate(
                                     self.id,
@@ -216,9 +217,9 @@ impl Client {
                             )
                         }
                     } else if pos_changed {
-                        if  -8 < (self.current_x - x) && (self.current_x - x) > 8 ||
-                            -8 < (self.current_y - y) && (self.current_y - y) > 8 ||
-                            -8 < (self.current_z - z) && (self.current_z - z) > 8 {
+                        if  -12 < (self.current_x - x) && (self.current_x - x) > 12 ||
+                            -12 < (self.current_y - y) && (self.current_y - y) > 12 ||
+                            -12 < (self.current_z - z) && (self.current_z - z) > 12 {
                             clientbound_packets.push(
                                 ClientBound::PositionUpdate(
                                     self.id,
