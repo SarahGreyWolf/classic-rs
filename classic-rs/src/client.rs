@@ -347,7 +347,9 @@ impl Client {
                 messages.push(ClientBound::Message(sender_id, encode_string(&msg)));
             }
         }else {
-            messages.push(ClientBound::Message(sender_id, encode_string(msg)));
+            let first_msg = format!("<{}>: {}", sender_name, msg);
+            info!("{}", first_msg);
+            messages.push(ClientBound::Message(sender_id, encode_string(&first_msg)));
         }
         messages
     }
