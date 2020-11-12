@@ -126,6 +126,7 @@ impl Client {
                     if protocol != 0 {
                         let mut world_lock = world.lock().await;
                         self.username = username;
+                        if self.username == "" {break}
                         let config = Config::get();
                         if config.server.online_mode {
                             let mut hasher = Md5::new();
@@ -307,7 +308,7 @@ impl Client {
                             f_msg.push_str(&format!("{}", split[i]));
                         }
                     }
-                    let mut msg = self.send_message(
+                    let mut msg = self.build_message(
                         self.username.as_str(), self.id, f_msg.as_str()).await;
                     echo_packets.append(&mut msg.clone());
                     clientbound_packets.append(&mut msg.clone());
@@ -334,7 +335,11 @@ impl Client {
         Ok(())
     }
 
-    pub async fn send_message(&self, sender_name: &str, sender_id: u8, msg: &str) -> Vec<ClientBound> {
+    pub async fn send_message(&mut self, messages: Vec<ClientBound>) {
+        self.write_packets(messages).await;
+    }
+
+    pub async fn build_message(&self, sender_name: &str, sender_id: u8, msg: &str) -> Vec<ClientBound> {
         let mut messages: Vec<ClientBound> = vec![];
         let split_msg = msg.split_ascii_whitespace();
         if split_msg.clone().count() > 1 {
@@ -361,7 +366,7 @@ impl Client {
                     } else { "".to_string() }
                 ).collect();
                 let msg = format!("{}", msg_full);
-                info!("{}", msg);
+                info!("<{}>: {}", sender_name, msg_full);
                 messages.push(ClientBound::Message(sender_id, encode_string(&msg)));
             }
         }else {

@@ -149,15 +149,21 @@ impl Server {
             panic!("Failed to bind to port {:#}", self.config.server.port);
         }
         info!("Server Running at {}:{:#}", self.config.server.ip, self.config.server.port);
+        let mut timer = Instant::now();
         let mut start = Instant::now();
+        let mut save = Instant::now();
         while self.running.load(Ordering::SeqCst) {
-            start = Instant::now();
+            timer = Instant::now();
 
             self.update_network().await;
             self.update_game().await;
 
-            if start.elapsed().as_millis() > 250 {
-                warn!("Last tick took {:?}", start.elapsed());
+            if timer.elapsed().as_millis() > 250 {
+                warn!("Last tick took {:?}", timer.elapsed());
+            }
+            if save.elapsed().as_secs() >= 300 {
+                self.save_world().await;
+                save = Instant::now();
             }
         }
 
@@ -330,6 +336,20 @@ impl Server {
                 duration = Instant::now();
             }
         });
+    }
+
+    async fn save_world(&mut self) {
+        let w_lock = self.world.clone();
+        let world = w_lock.lock().await;
+        for c in &mut self.clients {
+            c.send_message(
+                c.build_message("Console", 255, "Saving World..").await).await;
+        }
+        world.save_crs_file().await;
+        for c in &mut self.clients {
+            c.send_message(
+                c.build_message("Console", 255, "Saving Complete").await).await;
+        }
     }
 }
 

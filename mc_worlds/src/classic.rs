@@ -458,6 +458,8 @@ impl ClassicWorld {
     // }
 
     pub async fn save_crs_file(&self) {
+        let start_time = std::time::Instant::now();
+        info!("Starting World Save");
         let file_path = PathBuf::from(format!("./world/{}.crs", self.name));
         let file: File = match OpenOptions::new().write(true).open(file_path.as_path()).await {
             Ok(f) => {
@@ -473,6 +475,7 @@ impl ClassicWorld {
         };
         let mut writer: BufWriter<File> = BufWriter::new(file);
         writer.write_all(self.blocks.as_slice()).await.expect("Failed to write to world file");
+        info!("Saving took {:?}", start_time.elapsed());
     }
 
     pub fn get_size(&self) -> [usize; 3] {
