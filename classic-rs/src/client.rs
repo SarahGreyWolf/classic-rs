@@ -291,8 +291,8 @@ impl Client {
                     }
                     let mut msg = self.send_message(
                         self.username.as_str(), self.id, f_msg.as_str()).await;
-                    echo_packets.append(&mut msg);
-                    clientbound_packets.append(&mut msg);
+                    echo_packets.append(&mut msg.clone());
+                    clientbound_packets.append(&mut msg.clone());
                 }
                 ServerBound::UnknownPacket => {
                     let msg = String::from_utf8(receive_buffer.to_vec())
