@@ -18,9 +18,8 @@ fern = {version="0.6.0", features = ["colored"] }
 chrono = "0.4.12"
 log = "0.4.8"
 rand = "0.7.3"
-specs = "0.16.1"
+#specs = "0.16.1"
 tokio = {version="0.2.21", features=["full"]}
-backtrace = "0.3.50"
 flate2 = {version="1.0.17", features=["tokio"]}
 md-5 = "0.9.1"
 

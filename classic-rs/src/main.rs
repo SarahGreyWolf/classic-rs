@@ -7,7 +7,7 @@ use fern::colors::{Color, ColoredLevelConfig};
 use log::{info, debug, error, warn, Level};
 use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
-use specs::{World, WorldExt, DispatcherBuilder, Builder};
+// use specs::{World, WorldExt, DispatcherBuilder, Builder};
 use std::sync::{Arc};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -19,11 +19,9 @@ use grey_mc_api::event;
 
 mod client;
 mod config;
-mod ecs;
 
 use client::Client;
 use config::Config;
-use ecs::components::{common, player, entity};
 
 struct Server {
     protocol: u8,

@@ -1,3 +1,7 @@
+[profile.release]
+opt-level = 'z'
+lto = true
+
 [workspace]
 members = [
     "mineonline_api",
