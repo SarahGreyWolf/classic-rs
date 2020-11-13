@@ -285,17 +285,15 @@ impl Server {
             self.clients.remove(id);
         }
 
-        if self.beatdate.load(Ordering::SeqCst) {
-            if self.config.heartbeat.enabled {
-                if self.config.heartbeat.mineonline.active {
-                    let mut mo_beat = self.mo_heartbeat.lock().await;
-                    mo_beat.update_player_names(&self.usernames);
-                    mo_beat.update_users(self.clients.len() as u16);
-                }
-                if self.config.heartbeat.mojang.active {
-                    let mut m_beat = self.m_heartbeat.lock().await;
-                    m_beat.update_users(self.clients.len() as u16);
-                }
+        if self.config.heartbeat.enabled {
+            if self.config.heartbeat.mineonline.active {
+                let mut mo_beat = self.mo_heartbeat.lock().await;
+                mo_beat.update_player_names(&self.usernames);
+                mo_beat.update_users(self.clients.len() as u16);
+            }
+            if self.config.heartbeat.mojang.active {
+                let mut m_beat = self.m_heartbeat.lock().await;
+                m_beat.update_users(self.clients.len() as u16);
             }
         }
 
