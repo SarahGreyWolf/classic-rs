@@ -161,7 +161,9 @@ impl Server {
             if timer.elapsed().as_millis() > 250 {
                 warn!("Last tick took {:?}", timer.elapsed());
             }
-            if save.elapsed().as_secs() >= 300 {
+
+
+            if save.elapsed().as_secs() >= (self.config.server.save_interval * 60) as u64 {
                 self.save_world().await;
                 save = Instant::now();
             }

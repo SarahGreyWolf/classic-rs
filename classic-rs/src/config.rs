@@ -65,6 +65,7 @@ pub struct Server {
     pub online_mode: bool,
     pub whitelisted: bool,
     pub max_players: u16,
+    pub save_interval: u16,
 }
 
 impl Default for Server {
@@ -79,6 +80,7 @@ impl Default for Server {
             online_mode: true,
             whitelisted: false,
             max_players: 8,
+            save_interval: 5,
         }
     }
 }
