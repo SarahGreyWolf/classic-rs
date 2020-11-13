@@ -46,6 +46,14 @@ impl Server {
     pub async fn new() -> Self {
         let config = Config::get();
         let salt: String = thread_rng().sample_iter(&Alphanumeric).take(16).collect();
+        let running = Arc::new(AtomicBool::new(false));
+
+        let r = running.clone();
+
+        tokio::spawn(async move {
+            ctrl_c().await.expect("Failed to listen for event");
+            r.store(false, Ordering::SeqCst);
+        });
         let world: Arc<Mutex<ClassicWorld>>  = Arc::new(Mutex::new(ClassicWorld::get_or_create(
             &config.map.name, &config.map.creator_username,
             config.map.x_width, config.map.y_height, config.map.z_depth).await));
