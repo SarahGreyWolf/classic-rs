@@ -288,12 +288,16 @@ impl Client {
                             );
                         }
                     } else {
-                        world_lock.set_block(x as usize, y as usize, z as usize, block.into());
+                        let (n_x, n_y, n_z, block) =
+                            world_lock.set_block(x as usize, y as usize, z as usize, block.into());
                         echo_packets.push(
-                            ClientBound::SetBlock(x, y, z, block.into())
+                            ClientBound::SetBlock(x, y, z, Block::Air.into())
+                        );
+                        echo_packets.push(
+                            ClientBound::SetBlock(n_x as i16, n_y as i16, n_z as i16, block.into())
                         );
                         clientbound_packets.push(
-                            ClientBound::SetBlock(x, y, z, block.into())
+                            ClientBound::SetBlock(n_x as i16, n_y as i16, n_z as i16, block.into())
                         );
                     }
                     drop(world_lock);

@@ -486,12 +486,23 @@ impl ClassicWorld {
         &self.blocks
     }
 
-    pub fn set_block(&mut self, x: usize, y: usize, z: usize, block: Block) {
-        let pos = x + (self.x as usize * z) + ((self.z as usize * self.x as usize)  * y);
+    pub fn set_block(&mut self, x: usize, mut y: usize, z: usize, block: Block) -> (usize, usize, usize, Block) {
+        let mut pos = x + (self.x as usize * z) + ((self.z as usize * self.x as usize)  * y);
+        let mut block = block;
         if y < self.y {
-            self.blocks[pos as usize] = block.into();
+            match self.get_block(x, y-1, z) {
+                Block::Slab => {
+                    pos = x + (self.x as usize * z) + ((self.z as usize * self.x as usize)  * (y - 1));
+                    y = y-1;
+                    block = Block::DoubleSlab.into();
+
+                }
+                _ => {},
+            }
         }
+        self.blocks[pos as usize] = block.into();
         self.last_modified = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        (x, y, z, block)
     }
 
     pub fn get_block(&mut self, x: usize, y: usize, z: usize) -> Block {
