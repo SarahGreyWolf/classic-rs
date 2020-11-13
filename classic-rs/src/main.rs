@@ -100,20 +100,12 @@ impl Server {
         let (n_tx, n_rx) = flume::unbounded::<(u8, Vec<ClientBound>)>();
         let n_tx_clone = n_tx.clone();
 
-        let running = Arc::new(AtomicBool::new(false));
         let r = running.clone();
         tokio::spawn(async move {
             let listener = TcpListener::bind(format!("{}:{:#}", local_ip, port)).
                 await.expect("Failed to bind");
             r.store(true, Ordering::SeqCst);
             Server::listen(listener, tx_clone, n_tx_clone).await.expect("Failed to listen");
-        });
-
-        let r = running.clone();
-
-        tokio::spawn(async move {
-            ctrl_c().await.expect("Failed to listen for event");
-            r.store(false, Ordering::SeqCst);
         });
 
         let beatdate = Arc::new(AtomicBool::new(false));
@@ -290,12 +282,15 @@ impl Server {
                     let mut mo_beat = self.mo_heartbeat.lock().await;
                     mo_beat.update_player_names(&self.usernames);
                     mo_beat.update_users(self.clients.len() as u16);
+                    drop(mo_beat);
                 }
                 if self.config.heartbeat.mojang.active {
                     let mut m_beat = self.m_heartbeat.lock().await;
                     m_beat.update_users(self.clients.len() as u16);
+                    drop(m_beat);
                 }
             }
+            self.beatdate.store(false, Ordering::SeqCst);
         }
 
     }
@@ -330,7 +325,7 @@ impl Server {
                         m_heartbeat.build_request();
                         m_heartbeat.beat().await;
                     }
-                    beatdate.store(false, Ordering::SeqCst);
+                    // beatdate.store(false, Ordering::SeqCst);
                     drop(mo_heartbeat);
                     drop(m_heartbeat);
                 }
