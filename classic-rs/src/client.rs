@@ -123,6 +123,10 @@ impl Client {
             match packet {
                 ServerBound::PlayerIdentification(protocol, username,
                                                   key, _) => {
+                    if username.is_empty() {
+                        self.socket.shutdown(std::net::Shutdown::Both).expect("Failed to shutdown socket");
+                        break;
+                    }
                     if protocol != 0 {
                         let mut world_lock = world.lock().await;
                         self.username = username;
