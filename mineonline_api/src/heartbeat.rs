@@ -20,6 +20,7 @@ pub struct Heartbeat {
     ip: String,
     port: u16,
     name: String,
+    motd: String,
     public: String,
     max_users: u16,
     online: String,
@@ -33,7 +34,7 @@ pub struct Heartbeat {
 impl Heartbeat {
     /// Create a Heartbeat Object.
     ///
-    pub fn new(url: &str, ip: &str, port: u16, name: &str, public: bool, max_players: u16, online: bool,
+    pub fn new(url: &str, ip: &str, port: u16, name: &str, motd: &str, public: bool, max_players: u16, online: bool,
                client_hash: &str, whitelisted: bool) -> Self {
         Self {
             uuid: "".to_string(),
@@ -41,6 +42,7 @@ impl Heartbeat {
             ip: ip.to_string(),
             port,
             name: name.to_string(),
+            motd: motd.to_string(),
             public: public.to_string(),
             max_users: max_players,
             online: online.to_string(),
@@ -77,6 +79,8 @@ impl Heartbeat {
                                JsonValue::Number(Number::from(self.max_users)));
         mineonline_json.insert("name",
                                JsonValue::String(self.name.to_string()));
+        mineonline_json.insert("motd",
+                               JsonValue::String(self.motd.to_string()));
         mineonline_json.insert("onlinemode",
                                JsonValue::Boolean(self.online.to_string().parse().unwrap()));
         mineonline_json.insert("md5",

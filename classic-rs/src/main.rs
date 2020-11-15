@@ -62,6 +62,7 @@ impl Server {
             &config.server.ip,
             config.server.port,
             &config.server.name,
+            &config.server.motd,
             config.server.public,
             config.server.max_players,
             config.server.online_mode,
