@@ -129,7 +129,7 @@ impl Client {
             match packet {
                 ServerBound::PlayerIdentification(protocol, username,
                                                   key, _) => {
-                    if protocol != 7 {
+                    if protocol == 0x07 {
                         let mut world_lock = world.lock().await;
                         self.username = username;
                         if self.username == "" {break}
