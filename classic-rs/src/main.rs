@@ -236,24 +236,25 @@ impl Server {
             match client.handle_connect(&self.salt, self.world.clone()).await {
                 Ok(_) => {},
                 Err(e) => {
-                    if e.kind() == tokio::io::ErrorKind::ConnectionReset {
-                        self.network_tx.send((client.get_id(), client.despawn_self().to_vec())).unwrap();
-                        closed = true;
-                    } else if e.kind() == tokio::io::ErrorKind::ConnectionAborted {
-                        self.network_tx.send((client.get_id(), client.despawn_self().to_vec())).unwrap();
+                    if e.kind() == tokio::io::ErrorKind::ConnectionReset ||
+                        e.kind() == tokio::io::ErrorKind::ConnectionAborted {
+                        if !client.username.is_empty() {
+                            self.network_tx.send((client.get_id(), client.despawn_self().to_vec())).unwrap();
+                        }
                         closed = true;
                     } else {
                         panic!("{}", e);
                     }
                 }
             }
-            for i in 0..packet_buffer.len() {
-                let packets = &packet_buffer[i];
-                if packets.0 != client.get_id() {
-                    client.write_packets(packets.1.clone()).await;
+            if !closed {
+                for i in 0..packet_buffer.len() {
+                    let packets = &packet_buffer[i];
+                    if packets.0 != client.get_id() {
+                        client.write_packets(packets.1.clone()).await;
+                    }
                 }
-            }
-            if closed {
+            } else {
                 for i in 0..self.usernames.len() {
                     if i >= self.usernames.len() {
                         break;

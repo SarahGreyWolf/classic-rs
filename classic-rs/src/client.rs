@@ -94,9 +94,17 @@ impl Client {
         let mut receive_buffer = [0x00; 1460];
         self.socket.read(&mut receive_buffer).await?;
 
+        if !self.logged_in && receive_buffer[0] != 0x00 {
+            self.write_packets(vec![ClientBound::Ping]).await;
+            self.socket.shutdown(std::net::Shutdown::Both).unwrap();
+            return Err(Error::from(ErrorKind::ConnectionAborted));
+        }
+
         let mut serverbound_packets: Vec<ServerBound> = Vec::new();
         let mut clientbound_packets: Vec<ClientBound> = Vec::new();
         let mut echo_packets: Vec<ClientBound> = Vec::new();
+
+        // debug!("{:02x?}", receive_buffer);
 
         let mut buffer_handled: usize = 0;
         while buffer_handled < receive_buffer[..].len() &&
@@ -123,11 +131,7 @@ impl Client {
             match packet {
                 ServerBound::PlayerIdentification(protocol, username,
                                                   key, _) => {
-                    if username.is_empty() {
-                        self.socket.shutdown(std::net::Shutdown::Both).expect("Failed to shutdown socket");
-                        break;
-                    }
-                    if protocol != 0 {
+                    if protocol != 7 {
                         let mut world_lock = world.lock().await;
                         self.username = username;
                         if self.username == "" {break}
@@ -332,6 +336,7 @@ impl Client {
 
         self.write_packets(echo_packets).await;
         self.n_tx.send((self.id, clientbound_packets)).expect("Failed to send Packets");
+
         Ok(())
     }
 
@@ -453,7 +458,8 @@ impl Client {
         match self.socket.write_all(&packet_buffer[0..buffer_filled]).await {
             Ok(_) => {}
             Err(e) => {
-                if e.kind() == ErrorKind::ConnectionAborted || e.kind() == ErrorKind::ConnectionReset {} else {
+                if e.kind() == ErrorKind::ConnectionAborted || e.kind() == ErrorKind::ConnectionReset
+                    {} else {
                     panic!("Error: {:?}", e);
                 }
             }
