@@ -95,7 +95,7 @@ impl Client {
         self.socket.read(&mut receive_buffer).await?;
 
         if !self.logged_in && receive_buffer[0] != 0x00 {
-            self.write_packets(vec![ClientBound::Ping]).await;
+            self.socket.write_u8(0x01).await.unwrap();
             self.socket.shutdown(std::net::Shutdown::Both).unwrap();
             return Err(Error::from(ErrorKind::ConnectionAborted));
         }
@@ -103,8 +103,6 @@ impl Client {
         let mut serverbound_packets: Vec<ServerBound> = Vec::new();
         let mut clientbound_packets: Vec<ClientBound> = Vec::new();
         let mut echo_packets: Vec<ClientBound> = Vec::new();
-
-        // debug!("{:02x?}", receive_buffer);
 
         let mut buffer_handled: usize = 0;
         while buffer_handled < receive_buffer[..].len() &&
