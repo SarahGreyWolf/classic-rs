@@ -492,10 +492,11 @@ impl ClassicWorld {
         if y < self.y {
             match self.get_block(x, y-1, z) {
                 Block::Slab => {
-                    pos = x + (self.x as usize * z) + ((self.z as usize * self.x as usize)  * (y - 1));
-                    y = y-1;
-                    block = Block::DoubleSlab.into();
-
+                    if block == Block::Slab {
+                        pos = x + (self.x as usize * z) + ((self.z as usize * self.x as usize) * (y - 1));
+                        y = y - 1;
+                        block = Block::DoubleSlab;
+                    }
                 }
                 _ => {},
             }
