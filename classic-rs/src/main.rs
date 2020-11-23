@@ -2,12 +2,11 @@ use tokio::net::{TcpListener};
 use tokio::time::{Instant, Duration};
 use tokio::sync::Mutex;
 use tokio::signal::ctrl_c;
-use flume::{Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, unbounded};
 use fern::colors::{Color, ColoredLevelConfig};
 use log::{info, debug, error, warn, Level};
 use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
-// use specs::{World, WorldExt, DispatcherBuilder, Builder};
 use std::sync::{Arc};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -100,16 +99,16 @@ impl Server {
             }
         }
 
-        let (tx, rx) = flume::unbounded::<Client>();
+        let (tx, rx) = crossbeam_channel::unbounded::<Client>();
         let local_ip = config.server.local_ip.clone();
         let port = config.server.port.clone();
         let tx_clone = tx.clone();
-        let (n_tx, n_rx) = flume::unbounded::<(u8, Vec<ClientBound>)>();
+        let (n_tx, n_rx) = crossbeam_channel::unbounded::<(u8, Vec<ClientBound>)>();
         let n_tx_clone = n_tx.clone();
 
         let r = running.clone();
         tokio::spawn(async move {
-            let listener = TcpListener::bind(format!("{}:{:#}", local_ip, port)).
+            let listener = TcpListener::bind(format!("{}:{:#?}", local_ip, port)).
                 await.expect("Failed to bind");
             r.store(true, Ordering::SeqCst);
             Server::listen(listener, tx_clone, n_tx_clone).await.expect("Failed to listen");
@@ -207,8 +206,8 @@ impl Server {
                     self.clients.push(client);
                     self.beatdate.store(true, Ordering::SeqCst);
                 },
-                Err(flume::TryRecvError::Empty) => break,
-                Err(flume::TryRecvError::Disconnected) => {
+                Err(crossbeam_channel::TryRecvError::Empty) => break,
+                Err(crossbeam_channel::TryRecvError::Disconnected) => {
                     break;
                 }
             }
@@ -216,8 +215,8 @@ impl Server {
         loop {
             match self.network_rx.try_recv() {
                 Ok(packets) => packet_buffer.push(packets),
-                Err(flume::TryRecvError::Empty) => break,
-                Err(flume::TryRecvError::Disconnected) => {
+                Err(crossbeam_channel::TryRecvError::Empty) => break,
+                Err(crossbeam_channel::TryRecvError::Disconnected) => {
                     break;
                 }
             }

@@ -1,7 +1,7 @@
 use tokio::net::TcpStream;
 use tokio::io::{AsyncWriteExt, AsyncReadExt, Error, ErrorKind};
 use tokio::sync::{Mutex, MutexGuard};
-use flume::{Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender};
 use log::{info, debug, error, warn};
 use std::sync::{Arc};
 use std::ops::{Deref, DerefMut};
@@ -19,7 +19,6 @@ use mc_packets::classic::{ClientBound, ServerBound};
 use mc_worlds::classic::{ClassicWorld, Block};
 
 use crate::config::Config;
-use md5::digest::Update;
 
 const STRING_LENGTH: usize = 64;
 
