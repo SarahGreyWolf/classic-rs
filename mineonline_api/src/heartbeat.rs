@@ -7,6 +7,11 @@ use json::object::Object;
 use reqwest::{Body, Url, StatusCode};
 use log::{debug};
 use serde::{Serialize, Deserialize};
+use std::path::PathBuf;
+use std::fs::File;
+use image::{DynamicImage, GenericImageView, Pixel};
+use std::io::{BufReader, Error, Write};
+use image::io::Reader;
 
 #[derive(Deserialize, Debug)]
 struct Response {
@@ -29,6 +34,7 @@ pub struct Heartbeat {
     players_list: Vec<String>,
     whitelisted: bool,
     request: String,
+    image: String,
 }
 
 impl Heartbeat {
@@ -51,6 +57,7 @@ impl Heartbeat {
             players_list: vec![],
             whitelisted,
             request: "".to_string(),
+            image: Heartbeat::load_image(),
         }
     }
     /// Update the number of users currently connected to the server in the heartbeat.
@@ -87,6 +94,8 @@ impl Heartbeat {
                                JsonValue::String(self.client_hash.to_string()));
         mineonline_json.insert("whitelisted",
                                JsonValue::Boolean(self.whitelisted));
+        mineonline_json.insert("serverIcon",
+                               JsonValue::String(self.image.to_string()));
         // TODO: Support Owner Name
 
         let stringified = stringify(mineonline_json);
@@ -132,6 +141,32 @@ impl Heartbeat {
             }
         }
     }
+    /// Loads an image from a file to send as the icon
+    fn load_image() -> String {
+        let path = std::env::current_dir().unwrap().join("icon.png");
+        let file = std::fs::read(&path);
+        let buffer = match file {
+            Ok(f) => {
+                let image = image::open(&path).unwrap();
+                if image.dimensions() != (64, 64) {
+                    panic!("Provided icon.png is not 64x64");
+                }
+                f
+            },
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    let f: Vec<u8> = Vec::with_capacity(64*64);
+                    let mut file = std::fs::File::create(&path).unwrap();
+                    file.write_all(f.as_slice()).expect("Failed to write to file");
+                    f
+                } else {
+                    panic!("Could not find file: {}", e);
+                }
+            }
+        };
+        let image64: String = base64::encode(buffer);
+        image64
+    }
     /// Delete the server from the server list
     pub async fn delete(url: &str, uuid: &str) -> Result<(), std::io::Error> {
         let request_client = reqwest::Client::new();
@@ -144,4 +179,5 @@ impl Heartbeat {
         }
         Ok(())
     }
+
 }
