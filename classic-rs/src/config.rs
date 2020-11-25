@@ -130,16 +130,15 @@ impl Config {
 
     pub fn get() -> Self {
         let path = PathBuf::from_str("./server.toml").expect("Could not get path");
-        let mut file = "".to_string();
-        match read_to_string(path) {
+        let file = match read_to_string(path) {
             Ok(f) => {
-                file = f;
+                f
             },
             Err(e) => {
                 warn!("Error occurred reading config file: {}", e);
-                file = Config::create();
+                Config::create()
             },
-        }
+        };
 
         from_str(&file).expect("Failed to parse TOML to Config")
     }
