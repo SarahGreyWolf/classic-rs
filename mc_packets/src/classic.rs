@@ -202,7 +202,8 @@ impl Packet<&[u8]> for ServerBound {
                     cursor.position() as usize + 64].to_vec().into_iter()
                     .take_while(|&x| x != (0 as u8)).collect::<Vec<_>>();
                 let key = String::from_utf8(key)
-                    .expect("Invalid utf8 Message").replace("\u{20}", "");
+                    .expect("Invalid utf8 Message").replace("\u{20}", "")
+                    .replace("\r", "");
                 cursor.set_position(cursor.position() + 64);
                 ServerBound::PlayerIdentification(protocol, name, key, 0x00)
             }

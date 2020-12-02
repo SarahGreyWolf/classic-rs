@@ -8,3 +8,4 @@ server.toml
 *.java
 *.mine
 icon.png
+whitelist.txt

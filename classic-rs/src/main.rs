@@ -14,13 +14,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use mc_packets::Packet;
 use mc_packets::classic::{ClientBound, ServerBound};
 use mc_worlds::classic::ClassicWorld;
-use grey_mc_api::event;
 
 mod client;
 mod config;
 
 use client::Client;
-use config::Config;
+use config::{Config, load_whitelist};
 
 struct Server {
     protocol: u8,
@@ -33,7 +32,6 @@ struct Server {
     network_rx: Receiver<(u8, Vec<ClientBound>)>,
     network_tx: Sender<(u8, Vec<ClientBound>)>,
     world: Arc<Mutex<ClassicWorld>>,
-    // ecs_world: World,
     config: Config,
     clients: Vec<Client>,
     usernames: Vec<String>,
@@ -135,7 +133,6 @@ impl Server {
             network_rx: n_rx,
             network_tx: n_tx,
             world,
-            // ecs_world,
             config: Config::get(),
             clients: Vec::new(),
             usernames: Vec::new(),
@@ -147,11 +144,9 @@ impl Server {
             panic!("Failed to bind to port {:#}", self.config.server.port);
         }
         info!("Server Running at {}:{:#}", self.config.server.ip, self.config.server.port);
-        let mut timer = Instant::now();
-        let mut start = Instant::now();
         let mut save = Instant::now();
         while self.running.load(Ordering::SeqCst) {
-            timer = Instant::now();
+            let timer = Instant::now();
 
             self.update_network().await;
             self.update_game().await;

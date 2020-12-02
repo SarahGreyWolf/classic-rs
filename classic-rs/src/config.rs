@@ -1,11 +1,11 @@
-use std::fs::read_to_string;
-use std::fs::write;
+use std::fs::{File, write, read_to_string};
 use std::str::FromStr;
 use std::path::PathBuf;
-use std::io::Error;
+use std::io::{Error, Read};
 use serde_derive::{Deserialize, Serialize};
 use toml::{to_string, from_str};
-use log::{debug, warn};
+use log::{debug, warn, info};
+use tokio::io::ErrorKind;
 
 #[derive(Serialize, Deserialize)]
 pub struct MineOnline {
@@ -31,7 +31,7 @@ pub struct Mojang {
 impl Default for Mojang {
     fn default() -> Self {
         Self {
-            active: false,
+            active: true,
             url: "https://mineonline.codie.gg/heartbeat.jsp".to_string()
         }
     }
@@ -135,11 +135,34 @@ impl Config {
                 f
             },
             Err(e) => {
-                warn!("Error occurred reading config file: {}", e);
+                warn!("Error occurred reading config file: {}, creating new config file", e);
                 Config::create()
             },
         };
 
         from_str(&file).expect("Failed to parse TOML to Config")
     }
+}
+
+pub fn load_whitelist() -> Vec<String> {
+    let mut list: Vec<String> = vec![];
+    let path = PathBuf::from_str("./whitelist.txt").expect("Could not get path");
+    let file = match read_to_string(&path) {
+        Ok(f) => {
+            f
+        },
+        Err(e) => {
+            if e.kind() == ErrorKind::NotFound {
+                info!("Could not find whitelist.txt, creating one");
+                File::create(&path).expect("Failed to create whitelist.txt");
+                "".to_string()
+            } else {
+                panic!("Failed to access whitelist.txt: {}", e);
+            }
+        },
+    };
+    for line in file.lines() {
+        list.push(line.to_string());
+    }
+    list
 }

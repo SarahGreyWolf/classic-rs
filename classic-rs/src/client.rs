@@ -18,7 +18,7 @@ use mc_packets::Packet;
 use mc_packets::classic::{ClientBound, ServerBound};
 use mc_worlds::classic::{ClassicWorld, Block};
 
-use crate::config::Config;
+use crate::config::{Config, load_whitelist};
 
 const STRING_LENGTH: usize = 64;
 
@@ -89,7 +89,8 @@ impl Client {
         ]
     }
 
-    pub async fn handle_connect(&mut self, salt: &str, world: Arc<Mutex<ClassicWorld>>) -> Result<(), tokio::io::Error> {
+    pub async fn handle_connect(&mut self, salt: &str, world: Arc<Mutex<ClassicWorld>>)
+        -> Result<(), tokio::io::Error> {
         let mut receive_buffer = [0x00; 1460];
         self.socket.read(&mut receive_buffer).await?;
 
@@ -125,14 +126,21 @@ impl Client {
         }
 
         for packet in serverbound_packets {
+            let config = Config::get();
             match packet {
                 ServerBound::PlayerIdentification(protocol, username,
                                                   key, _) => {
+                    if config.server.whitelisted {
+                        let wl = load_whitelist();
+                        if !wl.contains(&username.to_lowercase()) {
+                            self.disconnect("This server is currently in whitelist mode").await?;
+                            break;
+                        }
+                    }
                     if protocol == 0x07 {
                         let mut world_lock = world.lock().await;
                         self.username = username;
                         if self.username == "" {break}
-                        let config = Config::get();
                         if config.server.online_mode {
                             let mut hasher = Md5::new();
                             let mut concat: Vec<u8> = vec![];
