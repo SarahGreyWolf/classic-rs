@@ -230,8 +230,9 @@ impl Server {
             match client.handle_connect(&self.salt, self.world.clone()).await {
                 Ok(_) => {},
                 Err(e) => {
-                    if e.kind() == tokio::io::ErrorKind::ConnectionReset ||
-                        e.kind() == tokio::io::ErrorKind::ConnectionAborted {
+                    if e.kind() == tokio::io::ErrorKind::ConnectionReset   ||
+                       e.kind() == tokio::io::ErrorKind::ConnectionAborted ||
+                       e.kind() == tokio::io::ErrorKind::BrokenPipe {
                         if !client.username.is_empty() {
                             self.network_tx.send((client.get_id(), client.despawn_self().to_vec())).unwrap();
                         }
