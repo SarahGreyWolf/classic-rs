@@ -1,6 +1,6 @@
 use tokio::net::{TcpListener};
-use tokio::time::{Instant, Duration};
-use tokio::sync::Mutex;
+use tokio::time::{Instant};
+use tokio::sync::{Mutex, RwLock};
 use tokio::signal::ctrl_c;
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use fern::colors::{Color, ColoredLevelConfig};
@@ -28,10 +28,9 @@ struct Server {
     m_heartbeat: Arc<Mutex<mojang_api::heartbeat::Heartbeat>>,
     running: Arc<AtomicBool>,
     beatdate: Arc<AtomicBool>,
-    client_rx: Receiver<Client>,
-    network_rx: Receiver<(u8, Vec<ClientBound>)>,
-    network_tx: Sender<(u8, Vec<ClientBound>)>,
-    world: Arc<Mutex<ClassicWorld>>,
+    bc_channel: Sender<Vec<ClientBound>>,
+    nw_channel: (Sender<(u8, Vec<ClientBound>)>, Receiver<(u8, Vec<ClientBound>)>),
+    world: Arc<RwLock<ClassicWorld>>,
     config: Config,
     clients: Vec<Client>,
     usernames: Vec<String>,
@@ -49,12 +48,12 @@ impl Server {
             ctrl_c().await.expect("Failed to listen for event");
             r.store(false, Ordering::SeqCst);
         });
-        let world: Arc<Mutex<ClassicWorld>>  = Arc::new(Mutex::new(ClassicWorld::get_or_create(
+        let world: Arc<RwLock<ClassicWorld>>  = Arc::new(RwLock::new(ClassicWorld::get_or_create(
             &config.map.name, &config.map.creator_username,
             config.map.x_width, config.map.y_height, config.map.z_depth).await));
 
         // #[cfg(feature = "mineonline_api")]
-        let mut mo_heartbeat = Arc::new(Mutex::new(mineonline_api::heartbeat::Heartbeat::new(
+        let mo_heartbeat = Arc::new(Mutex::new(mineonline_api::heartbeat::Heartbeat::new(
             &config.heartbeat.mineonline.url,
             &config.server.ip,
             config.server.port,
@@ -68,7 +67,7 @@ impl Server {
         )));
 
         // #[cfg(feature = "mojang_api")]
-        let mut m_heartbeat = Arc::new(Mutex::new(mojang_api::heartbeat::Heartbeat::new(
+        let m_heartbeat = Arc::new(Mutex::new(mojang_api::heartbeat::Heartbeat::new(
             &config.heartbeat.mojang.url,
             &config.server.ip,
             config.server.port,
@@ -97,19 +96,23 @@ impl Server {
             }
         }
 
-        let (tx, rx) = crossbeam_channel::unbounded::<Client>();
+        let (b_tx, b_rx) = crossbeam_channel::unbounded::<Vec<ClientBound>>();
         let local_ip = config.server.local_ip.clone();
         let port = config.server.port.clone();
-        let tx_clone = tx.clone();
+        let rx_clone = b_rx.clone();
         let (n_tx, n_rx) = crossbeam_channel::unbounded::<(u8, Vec<ClientBound>)>();
         let n_tx_clone = n_tx.clone();
+        let n_rx_clone = n_rx.clone();
 
         let r = running.clone();
+        let salt_c = salt.clone();
+        let world_c = world.clone();
         tokio::spawn(async move {
             let listener = TcpListener::bind(format!("{}:{:#?}", local_ip, port)).
                 await.expect("Failed to bind");
             r.store(true, Ordering::SeqCst);
-            Server::listen(listener, tx_clone, n_tx_clone).await.expect("Failed to listen");
+            Server::listen(listener, rx_clone, (n_tx_clone, n_rx_clone),
+                           world_c, &salt_c).await.expect("Failed to listen");
         });
 
         let beatdate = Arc::new(AtomicBool::new(false));
@@ -129,9 +132,8 @@ impl Server {
             m_heartbeat,
             beatdate,
             running,
-            client_rx: rx,
-            network_rx: n_rx,
-            network_tx: n_tx,
+            bc_channel: b_tx,
+            nw_channel: (n_tx, n_rx),
             world,
             config: Config::get(),
             clients: Vec::new(),
@@ -173,7 +175,7 @@ impl Server {
 
         info!("Saving World...");
         let start_save = Instant::now();
-        self.world.lock().await.save_crs_file().await;
+        self.world.read().await.save_crs_file().await;
         info!("Saving took {:?}", start_save.elapsed());
 
         if self.config.heartbeat.enabled {
@@ -192,93 +194,93 @@ impl Server {
     }
 
     async fn update_network(&mut self) {
-        let mut packet_buffer: Vec<(u8, Vec<ClientBound>)> = vec![(0, Vec::new())];
-        let mut player_cleanup: Vec<usize> = vec![];
-        let mut fresh_clients: Vec<(u8, usize)> = vec![];
-        loop {
-            match self.client_rx.try_recv() {
-                Ok(client) => {
-                    self.clients.push(client);
-                    self.beatdate.store(true, Ordering::SeqCst);
-                },
-                Err(crossbeam_channel::TryRecvError::Empty) => break,
-                Err(crossbeam_channel::TryRecvError::Disconnected) => {
-                    break;
-                }
-            }
-        }
-        loop {
-            match self.network_rx.try_recv() {
-                Ok(packets) => packet_buffer.push(packets),
-                Err(crossbeam_channel::TryRecvError::Empty) => break,
-                Err(crossbeam_channel::TryRecvError::Disconnected) => {
-                    break;
-                }
-            }
-        }
-
-        let mut clients = &mut self.clients;
-
-        for c_pos in 0..clients.len() {
-            let client = &mut clients[c_pos];
-            if client.username != "" && !self.usernames.contains(&client.username) {
-                fresh_clients.push((client.get_id(), c_pos));
-                self.usernames.push(client.username.clone());
-                self.beatdate.store(true, Ordering::SeqCst);
-            }
-            let mut closed = false;
-            match client.handle_connect(&self.salt, self.world.clone()).await {
-                Ok(_) => {},
-                Err(e) => {
-                    if e.kind() == tokio::io::ErrorKind::ConnectionReset   ||
-                       e.kind() == tokio::io::ErrorKind::ConnectionAborted ||
-                       e.kind() == tokio::io::ErrorKind::BrokenPipe {
-                        if !client.username.is_empty() {
-                            self.network_tx.send((client.get_id(), client.despawn_self().to_vec())).unwrap();
-                        }
-                        closed = true;
-                    } else {
-                        panic!("{}", e);
-                    }
-                }
-            }
-            if !closed {
-                for i in 0..packet_buffer.len() {
-                    let packets = &packet_buffer[i];
-                    if packets.0 != client.get_id() {
-                        client.write_packets(packets.1.clone()).await;
-                    }
-                }
-            } else {
-                for i in 0..self.usernames.len() {
-                    if i >= self.usernames.len() {
-                        break;
-                    }
-                    if self.usernames[i] == client.username {
-                        self.usernames.remove(i);
-                    }
-                }
-                player_cleanup.push(c_pos);
-                self.beatdate.store(true, Ordering::SeqCst);
-            }
-        }
-
-        if fresh_clients.len() > 0 {
-            for f_client in &fresh_clients {
-                let mut packets: Vec<ClientBound> = vec![];
-                for c in &mut self.clients {
-                    if c.get_id() != f_client.0 {
-                        packets.push(c.spawn_self().await);
-                    }
-                }
-                let c = &mut self.clients[f_client.1];
-                c.write_packets(packets).await;
-            }
-        }
-
-        for id in player_cleanup {
-            self.clients.remove(id);
-        }
+        // let mut packet_buffer: Vec<(u8, Vec<ClientBound>)> = vec![(0, Vec::new())];
+        // let mut player_cleanup: Vec<usize> = vec![];
+        // let mut fresh_clients: Vec<(u8, usize)> = vec![];
+        // loop {
+        //     match self.bc_channel.try_recv() {
+        //         Ok(client) => {
+        //             self.clients.push(client);
+        //             self.beatdate.store(true, Ordering::SeqCst);
+        //         },
+        //         Err(crossbeam_channel::TryRecvError::Empty) => break,
+        //         Err(crossbeam_channel::TryRecvError::Disconnected) => {
+        //             break;
+        //         }
+        //     }
+        // }
+        // loop {
+        //     match self.network_rx.try_recv() {
+        //         Ok(packets) => packet_buffer.push(packets),
+        //         Err(crossbeam_channel::TryRecvError::Empty) => break,
+        //         Err(crossbeam_channel::TryRecvError::Disconnected) => {
+        //             break;
+        //         }
+        //     }
+        // }
+        //
+        // let mut clients = &mut self.clients;
+        //
+        // for c_pos in 0..clients.len() {
+        //     let client = &mut clients[c_pos];
+        //     if client.username != "" && !self.usernames.contains(&client.username) {
+        //         fresh_clients.push((client.get_id(), c_pos));
+        //         self.usernames.push(client.username.clone());
+        //         self.beatdate.store(true, Ordering::SeqCst);
+        //     }
+        //     let mut closed = false;
+        //     match client.handle_connect(&self.salt, self.world.clone()).await {
+        //         Ok(_) => {},
+        //         Err(e) => {
+        //             if e.kind() == tokio::io::ErrorKind::ConnectionReset   ||
+        //                e.kind() == tokio::io::ErrorKind::ConnectionAborted ||
+        //                e.kind() == tokio::io::ErrorKind::BrokenPipe {
+        //                 if !client.username.is_empty() {
+        //                     self.network_tx.send((client.get_id(), client.despawn_self().to_vec())).unwrap();
+        //                 }
+        //                 closed = true;
+        //             } else {
+        //                 panic!("{}", e);
+        //             }
+        //         }
+        //     }
+        //     if !closed {
+        //         for i in 0..packet_buffer.len() {
+        //             let packets = &packet_buffer[i];
+        //             if packets.0 != client.get_id() {
+        //                 client.write_packets(packets.1.clone()).await;
+        //             }
+        //         }
+        //     } else {
+        //         for i in 0..self.usernames.len() {
+        //             if i >= self.usernames.len() {
+        //                 break;
+        //             }
+        //             if self.usernames[i] == client.username {
+        //                 self.usernames.remove(i);
+        //             }
+        //         }
+        //         player_cleanup.push(c_pos);
+        //         self.beatdate.store(true, Ordering::SeqCst);
+        //     }
+        // }
+        //
+        // if fresh_clients.len() > 0 {
+        //     for f_client in &fresh_clients {
+        //         let mut packets: Vec<ClientBound> = vec![];
+        //         for c in &mut self.clients {
+        //             if c.get_id() != f_client.0 {
+        //                 packets.push(c.spawn_self().await);
+        //             }
+        //         }
+        //         let c = &mut self.clients[f_client.1];
+        //         c.write_packets(packets).await;
+        //     }
+        // }
+        //
+        // for id in player_cleanup {
+        //     self.clients.remove(id);
+        // }
         if self.beatdate.clone().load(Ordering::SeqCst) {
             if self.config.heartbeat.enabled {
                 if self.config.heartbeat.mineonline.active {
@@ -298,14 +300,52 @@ impl Server {
 
     }
 
-    async fn listen(mut listener: TcpListener, tx: Sender<Client>, n_tx: Sender<(u8, Vec<ClientBound>)>)
+    async fn listen(mut listener: TcpListener, bc_rx: Receiver<Vec<ClientBound>>,
+                    (nw_tx, nw_rx): (Sender<(u8, Vec<ClientBound>)>, Receiver<(u8, Vec<ClientBound>)>),
+                    world: Arc<RwLock<ClassicWorld>>, salt: &str)
         -> Result<(), tokio::io::Error> {
         let mut id: u8 = 0;
+        let clients: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(vec![]));
         while let Ok((stream, addr)) = listener.accept().await {
-            let client = Client::new(id, stream, n_tx.clone()).await;
-            if tx.send(client).is_err() {
-                panic!("Failed to send client");
-            }
+            let nw_tx_clone = nw_tx.clone();
+            let nw_rx_clone = nw_rx.clone();
+            let mut client = Client::new(id, stream, (nw_tx.clone(), nw_rx.clone()),
+                                         bc_rx.clone(), world.clone(), &salt).await;
+            let clients_clone = clients.clone();
+            tokio::spawn(async move {
+                loop {
+                    if client.username != "" && !clients_clone.read().await.contains(&client.username) {
+                        clients_clone.write().await.push(client.username.clone());
+                    }
+                    match client.handle_connect().await {
+                        Ok(_) => {},
+                        Err(e) => {
+                            if e.kind() == tokio::io::ErrorKind::ConnectionReset ||
+                                e.kind() == tokio::io::ErrorKind::ConnectionAborted ||
+                                e.kind() == tokio::io::ErrorKind::BrokenPipe {
+                                if !client.username.is_empty() {
+                                    nw_tx_clone.send((client.get_id(), client.despawn_self().to_vec())).unwrap();
+                                    let cc_mut_clone = clients_clone.clone();
+                                    let mut cc = cc_mut_clone.write().await;
+                                    let cc_imut_clone = clients_clone.clone();
+                                    let icc = cc_imut_clone.read().await;
+                                    let id = icc.iter()
+                                        .enumerate().find(|(i, un)| un == &&client.username );
+                                    match id {
+                                        Some(c) => {
+                                            cc.remove(c.0);
+                                        }
+                                        None => {}
+                                    }
+                                }
+                                break;
+                            } else {
+                                panic!("{}", e);
+                            }
+                        }
+                    }
+                }
+            });
             id += 1;
         }
         Ok(())
@@ -339,7 +379,7 @@ impl Server {
 
     async fn save_world(&mut self) {
         let w_lock = self.world.clone();
-        let world = w_lock.lock().await;
+        let world = w_lock.read().await;
         for c in &mut self.clients {
             c.send_message(
                 c.build_message("Console", 255, "Saving World..").await).await;

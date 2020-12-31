@@ -1,6 +1,6 @@
 use tokio::net::TcpStream;
 use tokio::io::{AsyncWriteExt, AsyncReadExt, Error, ErrorKind};
-use tokio::sync::{Mutex, MutexGuard};
+use tokio::sync::{Mutex, MutexGuard, RwLock};
 use crossbeam_channel::{Receiver, Sender};
 use log::{info, debug, error, warn};
 use std::sync::{Arc};
@@ -19,6 +19,7 @@ use mc_packets::classic::{ClientBound, ServerBound};
 use mc_worlds::classic::{ClassicWorld, Block};
 
 use crate::config::{Config, load_whitelist};
+use std::borrow::BorrowMut;
 
 const STRING_LENGTH: usize = 64;
 
@@ -30,7 +31,10 @@ pub struct Client {
     user_type: u8,
     logged_in: bool,
     socket: TcpStream,
-    n_tx: Sender<(u8, Vec<ClientBound>)>,
+    nw_channel: (Sender<(u8, Vec<ClientBound>)>, Receiver<(u8, Vec<ClientBound>)>),
+    bc_rx: Receiver<Vec<ClientBound>>,
+    salt: String,
+    world: Arc<RwLock<ClassicWorld>>,
     current_x: i16,
     current_y: i16,
     current_z: i16,
@@ -40,7 +44,9 @@ pub struct Client {
 }
 
 impl Client {
-    pub async fn new(id: u8, sock: TcpStream, n_tx: Sender<(u8, Vec<ClientBound>)>) -> Self {
+    pub async fn new(id: u8, sock: TcpStream,
+                     nw_channel: (Sender<(u8, Vec<ClientBound>)>, Receiver<(u8, Vec<ClientBound>)>),
+                     bc_rx: Receiver<Vec<ClientBound>>, world: Arc<RwLock<ClassicWorld>>, salt: &str) -> Self {
         Self {
             username: "".to_string(),
             ip: sock.peer_addr().expect("Failed to get peers address").ip().to_string(),
@@ -48,7 +54,10 @@ impl Client {
             user_type: 0x00,
             logged_in: false,
             socket: sock,
-            n_tx,
+            nw_channel,
+            bc_rx,
+            salt: salt.to_string(),
+            world,
             current_x: 0,
             current_y: 0,
             current_z: 0,
@@ -89,8 +98,9 @@ impl Client {
         ]
     }
 
-    pub async fn handle_connect(&mut self, salt: &str, world: Arc<Mutex<ClassicWorld>>)
-        -> Result<(), tokio::io::Error> {
+    pub async fn handle_connect(&mut self) -> Result<(), tokio::io::Error> {
+        let salt = self.salt.clone();
+        let world = self.world.clone();
         let mut receive_buffer = [0x00; 1460];
         self.socket.read(&mut receive_buffer).await?;
 
@@ -138,7 +148,7 @@ impl Client {
                         }
                     }
                     if protocol == 0x07 {
-                        let mut world_lock = world.lock().await;
+                        let mut world_lock = world.read().await;
                         self.username = username;
                         if self.username == "" {break}
                         if config.server.online_mode {
@@ -161,7 +171,7 @@ impl Client {
                             encode_string(&config.server.motd),
                             0x00,
                         ), ClientBound::LevelInitialize]).await;
-                        self.send_blocks(world_lock.deref_mut()).await.expect("Failed to send blocks");
+                        self.send_blocks(&world_lock).await.expect("Failed to send blocks");
                         let size = world_lock.get_size();
                         self.write_packets(vec![
                             ClientBound::LevelFinalize(size[0], size[1], size[2]),
@@ -284,7 +294,7 @@ impl Client {
                     self.current_pitch = pitch;
                 }
                 ServerBound::SetBlock(x, y, z, mode, block) => {
-                    let mut world_lock = world.lock().await;
+                    let mut world_lock = world.write().await;
                     let block = Block::from(block).clone();
                     if mode == 0x00 {
                         if block != Block::Bedrock {
@@ -340,7 +350,13 @@ impl Client {
         echo_packets.push(ClientBound::Ping);
 
         self.write_packets(echo_packets).await;
-        self.n_tx.send((self.id, clientbound_packets)).expect("Failed to send Packets");
+        let bc_packets = self.bc_rx.recv().expect("Failed to get packets from server");
+        self.write_packets(bc_packets);
+        self.nw_channel.0.send((self.id, clientbound_packets)).expect("Failed to send Packets");
+        let packets = self.nw_channel.1.recv().expect("Failed to get other packets");
+        if packets.0 != self.get_id() {
+            self.write_packets(packets.1.clone()).await;
+        }
 
         Ok(())
     }
@@ -395,7 +411,7 @@ impl Client {
         messages
     }
 
-    async fn send_blocks(&mut self, world: &mut ClassicWorld) -> Result<(), tokio::io::Error> {
+    async fn send_blocks(&mut self, world: &ClassicWorld) -> Result<(), tokio::io::Error> {
         let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
         encoder.write(&(world.get_blocks().len() as u32).to_be_bytes()).unwrap();
         encoder.write_all(world.get_blocks().as_slice()).unwrap();
