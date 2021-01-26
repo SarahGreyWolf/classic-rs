@@ -1,6 +1,6 @@
 # Classic-RS
 
-## TEMPORARILY ON HOLD
+### TEMPORARILY ON HOLD
 I'm putting this project on hold for now while I work on Uni work.\
 I just lost all drive for it.\
 It is technically usable right now though it has some issues due to clients not being multi-threaded such as the network thread being held up when a new player joins.\
