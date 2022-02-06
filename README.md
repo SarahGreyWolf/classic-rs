@@ -1,10 +1,11 @@
-# Classic-RS
+# ARCHIVED
 
-### TEMPORARILY ON HOLD
-I'm putting this project on hold for now while I work on Uni work.\
-I just lost all drive for it.\
+I've decided that I'm dropping this project entirely and archiving it.\
+I just lost all drive for it and the code I've written is a mess that even I struggle to wrap my head around now.\
 It is technically usable right now though it has some issues due to clients not being multi-threaded such as the network thread being held up when a new player joins.\
 You can give the feature/threaded-clients branch a go if you want that but in it's current state players get no interactions from other players.
+
+# Classic-RS
 
 A (W.I.P) implementation of the minecraft classic server.\
 Aimed at supporting the project [Mineonline](http://mineonline.codie.gg/).
